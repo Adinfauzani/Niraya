@@ -73,7 +73,7 @@ export function TransactionDetailSheet({
       cashReceived: transaction.cashReceived,
       change: transaction.change,
       cashier: transaction.cashier,
-      storeName: settings.businessName,
+      storeName: settings?.businessName || "Niraya POS",
       logoUrl: '/Logo.png',
       details,
     })

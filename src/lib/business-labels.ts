@@ -54,6 +54,14 @@ export const APP_ROLE_LABELS: Record<string, string> = {
   owner: 'Owner',
 }
 
+export const APP_ROLE_DESCRIPTIONS: Record<string, string> = {
+  user: 'Akses dasar setelah login; belum memiliki izin operasional dashboard.',
+  cashier: 'Dapat memproses POS/operasional kasir sesuai izin aplikasi.',
+  manager: 'Dapat mengelola operasional harian sesuai izin aplikasi.',
+  admin: 'Dapat mengelola pengaturan/akses sesuai izin aplikasi.',
+  owner: 'Akses penuh bisnis. Owner terakhir tidak boleh diturunkan/dihapus dari sini.',
+}
+
 export function appRoleLabel(role: string | undefined) {
   if (!role) return APP_ROLE_LABELS.user
   return APP_ROLE_LABELS[role] ?? role

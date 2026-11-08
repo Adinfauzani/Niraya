@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@/components/themeprovider";
 
@@ -15,7 +16,19 @@ const jetBrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Niraya POS",
-  description: "Niraya POS - Point of Sale System",
+  description: "Niraya POS - Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
+  openGraph: {
+    title: "Niraya POS",
+    description: "Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
+    images: [{ url: "/og.png", width: 1672, height: 941, alt: "Niraya POS" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Niraya POS",
+    description: "Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
+    images: ["/og.png"],
+  },
   icons: {
     icon: [
       { url: "/favicon/favicon.ico" },
@@ -45,7 +58,10 @@ export default function RootLayout({
       <body
         className={`${plusJakartaSans.variable} ${jetBrainsMono.variable} antialiased`}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <Toaster richColors closeButton position="top-center" />
+        </ThemeProvider>
       </body>
     </html>
   );

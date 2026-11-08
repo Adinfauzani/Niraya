@@ -124,10 +124,10 @@ export default function PosPage() {
   const totals = useMemo(
     () =>
       computeTotals(cart.subtotal, effectiveMember, {
-        memberDiscountRate: 0.1,
-        taxRate: 0.1,
+        memberDiscountRate: settings?.memberDiscountRate ?? 0,
+        taxRate: settings?.taxRate ?? 0,
       }),
-    [cart.subtotal, effectiveMember],
+    [cart.subtotal, effectiveMember, settings?.memberDiscountRate, settings?.taxRate],
   )
 
   const quantityByProductId = useMemo(() => {

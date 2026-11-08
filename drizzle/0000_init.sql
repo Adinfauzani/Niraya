@@ -153,6 +153,23 @@ CREATE TABLE "core"."UserProfiles" (
 	CONSTRAINT "UserProfiles_UserId_key" UNIQUE("UserId")
 );
 --> statement-breakpoint
+--> statement-breakpoint
+CREATE TABLE "core"."DiningTables" (
+	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"BusinessId" uuid DEFAULT '00000000-0000-0000-0000-000000000001' NOT NULL,
+	"StoreId" uuid DEFAULT '00000000-0000-0000-0000-000000000002' NOT NULL,
+	"TableNumber" text,
+	"Name" text,
+	"QrType" text DEFAULT 'TABLE' NOT NULL,
+	"QrTokenHash" text NOT NULL,
+	"IsActive" boolean DEFAULT true NOT NULL,
+	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "DiningTables_QrTokenHash_key" UNIQUE("QrTokenHash"),
+	CONSTRAINT "DiningTables_StoreId_TableNumber_key" UNIQUE("StoreId","TableNumber"),
+	CONSTRAINT "DiningTables_QrType_check" CHECK ("core"."DiningTables"."QrType" in ('TABLE','GENERAL'))
+);
+
 CREATE TABLE "customers"."CustomerAddresses" (
 	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"CustomerId" text NOT NULL,
@@ -536,6 +553,8 @@ CREATE TABLE "transactions"."CheckoutIdempotency" (
 	"Key" text PRIMARY KEY NOT NULL,
 	"RequestHash" text NOT NULL,
 	"TransactionId" text,
+	"OrderId" text,
+	"Scope" text,
 	"Response" text,
 	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
 	"ExpiresAt" timestamp with time zone
@@ -603,17 +622,136 @@ CREATE TABLE "transactions"."Transactions" (
 --> statement-breakpoint
 CREATE TABLE "payments"."Payments" (
 	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"TransactionId" text NOT NULL,
+	"TransactionId" text,
+	"OrderId" text,
+	"Channel" text,
+	"Currency" text DEFAULT 'IDR' NOT NULL,
 	"PaymentMethod" text NOT NULL,
 	"Amount" numeric(14, 2) NOT NULL,
 	"ReferenceNumber" text,
+	"Provider" text,
+	"ProviderReference" text,
+	"ProofUrl" text,
+	"ProofSubmittedAt" timestamp with time zone,
+	"VerifiedByUserId" text,
+	"VerifiedAt" timestamp with time zone,
+	"VerificationNote" text,
+	"ExpiresAt" timestamp with time zone,
+	"Metadata" jsonb,
 	"Status" text DEFAULT 'completed' NOT NULL,
-	"PaidAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"PaidAt" timestamp with time zone,
 	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "Payments_Amount_check" CHECK ("payments"."Payments"."Amount" >= 0),
-	CONSTRAINT "Payments_Status_check" CHECK ("payments"."Payments"."Status" in ('pending', 'completed', 'failed', 'refunded'))
+	CONSTRAINT "Payments_Status_check" CHECK ("payments"."Payments"."Status" in ('pending','completed','failed','refunded','expired','partially_refunded','UNPAID','PENDING','PAID','FAILED','EXPIRED','PARTIALLY_REFUNDED','REFUNDED','WAITING_PROOF','PENDING_VERIFICATION','REJECTED'))
 );
 --> statement-breakpoint
+--> statement-breakpoint
+CREATE TABLE "transactions"."Orders" (
+	"Id" text PRIMARY KEY NOT NULL,
+	"BusinessId" uuid DEFAULT '00000000-0000-0000-0000-000000000001' NOT NULL,
+	"StoreId" uuid DEFAULT '00000000-0000-0000-0000-000000000002' NOT NULL,
+	"OrderNumber" text NOT NULL,
+	"OrderSource" text NOT NULL,
+	"OrderStatus" text DEFAULT 'SUBMITTED' NOT NULL,
+	"PaymentStatus" text DEFAULT 'UNPAID' NOT NULL,
+	"DiningTableId" uuid,
+	"CustomerId" text,
+	"CustomerName" text,
+	"CustomerPhone" text,
+	"CashierId" text,
+	"CashierName" text,
+	"OrderType" text DEFAULT 'dine-in' NOT NULL,
+	"TableNumber" text,
+	"PaymentMethod" text,
+	"Currency" text DEFAULT 'IDR' NOT NULL,
+	"Subtotal" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"DiscountTotal" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"TaxTotal" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"GrandTotal" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"AmountPaid" numeric(14, 2),
+	"ChangeAmount" numeric(14, 2),
+	"IdempotencyKey" text,
+	"LinkedTransactionId" text,
+	"Notes" text,
+	"CancelReason" text,
+	"SubmittedAt" timestamp with time zone,
+	"PaidAt" timestamp with time zone,
+	"CompletedAt" timestamp with time zone,
+	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "Orders_OrderNumber_key" UNIQUE("OrderNumber"),
+	CONSTRAINT "Orders_IdempotencyKey_key" UNIQUE("IdempotencyKey"),
+	CONSTRAINT "Orders_OrderSource_check" CHECK ("transactions"."Orders"."OrderSource" in ('POS','QR_TABLE','QR_GENERAL')),
+	CONSTRAINT "Orders_OrderStatus_check" CHECK ("transactions"."Orders"."OrderStatus" in ('DRAFT','SUBMITTED','ACCEPTED','PREPARING','READY','COMPLETED','CANCELLED')),
+	CONSTRAINT "Orders_PaymentStatus_check" CHECK ("transactions"."Orders"."PaymentStatus" in ('UNPAID','PENDING','PAID','FAILED','EXPIRED','PARTIALLY_REFUNDED','REFUNDED')),
+	CONSTRAINT "Orders_Subtotal_check" CHECK ("transactions"."Orders"."Subtotal" >= 0),
+	CONSTRAINT "Orders_DiscountTotal_check" CHECK ("transactions"."Orders"."DiscountTotal" >= 0),
+	CONSTRAINT "Orders_TaxTotal_check" CHECK ("transactions"."Orders"."TaxTotal" >= 0),
+	CONSTRAINT "Orders_GrandTotal_check" CHECK ("transactions"."Orders"."GrandTotal" >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE "transactions"."OrderItems" (
+	"Id" text PRIMARY KEY NOT NULL,
+	"OrderId" text NOT NULL,
+	"ProductId" text NOT NULL,
+	"ProductVariantId" uuid,
+	"ProductName" text NOT NULL,
+	"Sku" text,
+	"VariantName" text,
+	"Quantity" integer NOT NULL,
+	"UnitPrice" numeric(14, 2) NOT NULL,
+	"DiscountTotal" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"TaxTotal" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"Subtotal" numeric(14, 2) NOT NULL,
+	"Notes" text,
+	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "OrderItems_Quantity_check" CHECK ("transactions"."OrderItems"."Quantity" > 0),
+	CONSTRAINT "OrderItems_Amounts_check" CHECK ("transactions"."OrderItems"."UnitPrice" >= 0 AND "transactions"."OrderItems"."DiscountTotal" >= 0 AND "transactions"."OrderItems"."TaxTotal" >= 0 AND "transactions"."OrderItems"."Subtotal" >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE "transactions"."OrderStatusHistory" (
+	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"OrderId" text NOT NULL,
+	"FromOrderStatus" text,
+	"ToOrderStatus" text NOT NULL,
+	"FromPaymentStatus" text,
+	"ToPaymentStatus" text,
+	"ChangedByUserId" text,
+	"ChangedByRole" text,
+	"Reason" text,
+	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "transactions"."GuestOrderAccess" (
+	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"OrderId" text NOT NULL,
+	"TokenHash" text NOT NULL,
+	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"ExpiresAt" timestamp with time zone,
+	"RevokedAt" timestamp with time zone,
+	"LastUsedAt" timestamp with time zone,
+	CONSTRAINT "GuestOrderAccess_TokenHash_key" UNIQUE("TokenHash")
+);
+--> statement-breakpoint
+CREATE TABLE "inventory"."InventoryReservations" (
+	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"BusinessId" uuid DEFAULT '00000000-0000-0000-0000-000000000001' NOT NULL,
+	"StoreId" uuid DEFAULT '00000000-0000-0000-0000-000000000002' NOT NULL,
+	"OrderId" text NOT NULL,
+	"OrderItemId" text,
+	"ProductId" text NOT NULL,
+	"Quantity" integer NOT NULL,
+	"Status" text DEFAULT 'RESERVED' NOT NULL,
+	"ExpiresAt" timestamp with time zone,
+	"ReleasedAt" timestamp with time zone,
+	"ConvertedAt" timestamp with time zone,
+	"ReleaseReason" text,
+	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "InventoryReservations_Quantity_check" CHECK ("inventory"."InventoryReservations"."Quantity" > 0),
+	CONSTRAINT "InventoryReservations_Status_check" CHECK ("inventory"."InventoryReservations"."Status" in ('RESERVED','RELEASED','CONVERTED','EXPIRED'))
+);
+
 CREATE TABLE "payments"."TransactionDiscounts" (
 	"Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"TransactionId" text NOT NULL,
@@ -671,11 +809,21 @@ CREATE TABLE "settings"."BusinessSettings" (
 	"MemberDiscountRate" numeric(5, 4) DEFAULT '0' NOT NULL,
 	"LowStockThreshold" integer DEFAULT 10 NOT NULL,
 	"LegacyReceiptFooter" text DEFAULT '' NOT NULL,
+	"QrOrderingEnabled" boolean DEFAULT false NOT NULL,
+	"QrManualTransferEnabled" boolean DEFAULT false NOT NULL,
+	"ManualTransferBankName" text,
+	"ManualTransferAccountName" text,
+	"ManualTransferAccountNumber" text,
+	"ManualTransferInstructions" text,
+	"ReservationExpiryMinutes" integer DEFAULT 30 NOT NULL,
+	"PaymentGatewayModuleStatus" text DEFAULT 'NOT_INSTALLED' NOT NULL,
 	"CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
 	"UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "BusinessSettings_TaxRate_check" CHECK ("settings"."BusinessSettings"."TaxRate" >= 0 and "settings"."BusinessSettings"."TaxRate" <= 1),
 	CONSTRAINT "BusinessSettings_MemberDiscountRate_check" CHECK ("settings"."BusinessSettings"."MemberDiscountRate" >= 0 and "settings"."BusinessSettings"."MemberDiscountRate" <= 1),
-	CONSTRAINT "BusinessSettings_LowStockThreshold_check" CHECK ("settings"."BusinessSettings"."LowStockThreshold" >= 0)
+	CONSTRAINT "BusinessSettings_LowStockThreshold_check" CHECK ("settings"."BusinessSettings"."LowStockThreshold" >= 0),
+	CONSTRAINT "BusinessSettings_ReservationExpiryMinutes_check" CHECK ("settings"."BusinessSettings"."ReservationExpiryMinutes" > 0),
+	CONSTRAINT "BusinessSettings_PaymentGatewayModuleStatus_check" CHECK ("settings"."BusinessSettings"."PaymentGatewayModuleStatus" in ('NOT_INSTALLED','INSTALLED_NOT_CONFIGURED','CONFIGURED_NOT_READY','ACTIVE','TEMPORARILY_UNAVAILABLE'))
 );
 --> statement-breakpoint
 CREATE TABLE "settings"."ReceiptSettings" (
@@ -785,6 +933,26 @@ ALTER TABLE "settings"."BusinessSettings" ADD CONSTRAINT "BusinessSettings_Busin
 ALTER TABLE "settings"."ReceiptSettings" ADD CONSTRAINT "ReceiptSettings_BusinessId_Businesses_Id_fk" FOREIGN KEY ("BusinessId") REFERENCES "core"."Businesses"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "settings"."ReceiptSettings" ADD CONSTRAINT "ReceiptSettings_StoreId_Stores_Id_fk" FOREIGN KEY ("StoreId") REFERENCES "core"."Stores"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "settings"."StoreSettings" ADD CONSTRAINT "StoreSettings_BusinessId_Businesses_Id_fk" FOREIGN KEY ("BusinessId") REFERENCES "core"."Businesses"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+
+ALTER TABLE "core"."DiningTables" ADD CONSTRAINT "DiningTables_BusinessId_Businesses_Id_fk" FOREIGN KEY ("BusinessId") REFERENCES "core"."Businesses"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "core"."DiningTables" ADD CONSTRAINT "DiningTables_StoreId_Stores_Id_fk" FOREIGN KEY ("StoreId") REFERENCES "core"."Stores"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."Orders" ADD CONSTRAINT "Orders_BusinessId_Businesses_Id_fk" FOREIGN KEY ("BusinessId") REFERENCES "core"."Businesses"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."Orders" ADD CONSTRAINT "Orders_StoreId_Stores_Id_fk" FOREIGN KEY ("StoreId") REFERENCES "core"."Stores"("Id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."Orders" ADD CONSTRAINT "Orders_DiningTableId_DiningTables_Id_fk" FOREIGN KEY ("DiningTableId") REFERENCES "core"."DiningTables"("Id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."Orders" ADD CONSTRAINT "Orders_CustomerId_Customers_Id_fk" FOREIGN KEY ("CustomerId") REFERENCES "customers"."Customers"("Id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."Orders" ADD CONSTRAINT "Orders_LinkedTransactionId_Transactions_Id_fk" FOREIGN KEY ("LinkedTransactionId") REFERENCES "transactions"."Transactions"("Id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."OrderItems" ADD CONSTRAINT "OrderItems_OrderId_Orders_Id_fk" FOREIGN KEY ("OrderId") REFERENCES "transactions"."Orders"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."OrderItems" ADD CONSTRAINT "OrderItems_ProductId_Products_Id_fk" FOREIGN KEY ("ProductId") REFERENCES "products"."Products"("Id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."OrderItems" ADD CONSTRAINT "OrderItems_ProductVariantId_ProductVariants_Id_fk" FOREIGN KEY ("ProductVariantId") REFERENCES "products"."ProductVariants"("Id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."OrderStatusHistory" ADD CONSTRAINT "OrderStatusHistory_OrderId_Orders_Id_fk" FOREIGN KEY ("OrderId") REFERENCES "transactions"."Orders"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."GuestOrderAccess" ADD CONSTRAINT "GuestOrderAccess_OrderId_Orders_Id_fk" FOREIGN KEY ("OrderId") REFERENCES "transactions"."Orders"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "transactions"."CheckoutIdempotency" ADD CONSTRAINT "CheckoutIdempotency_OrderId_Orders_Id_fk" FOREIGN KEY ("OrderId") REFERENCES "transactions"."Orders"("Id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments"."Payments" ADD CONSTRAINT "Payments_OrderId_Orders_Id_fk" FOREIGN KEY ("OrderId") REFERENCES "transactions"."Orders"("Id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory"."InventoryReservations" ADD CONSTRAINT "InventoryReservations_BusinessId_Businesses_Id_fk" FOREIGN KEY ("BusinessId") REFERENCES "core"."Businesses"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory"."InventoryReservations" ADD CONSTRAINT "InventoryReservations_StoreId_Stores_Id_fk" FOREIGN KEY ("StoreId") REFERENCES "core"."Stores"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory"."InventoryReservations" ADD CONSTRAINT "InventoryReservations_OrderId_Orders_Id_fk" FOREIGN KEY ("OrderId") REFERENCES "transactions"."Orders"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory"."InventoryReservations" ADD CONSTRAINT "InventoryReservations_OrderItemId_OrderItems_Id_fk" FOREIGN KEY ("OrderItemId") REFERENCES "transactions"."OrderItems"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory"."InventoryReservations" ADD CONSTRAINT "InventoryReservations_ProductId_Products_Id_fk" FOREIGN KEY ("ProductId") REFERENCES "products"."Products"("Id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "settings"."StoreSettings" ADD CONSTRAINT "StoreSettings_StoreId_Stores_Id_fk" FOREIGN KEY ("StoreId") REFERENCES "core"."Stores"("Id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "AuditLogs_BusinessId_idx" ON "audit"."AuditLogs" USING btree ("BusinessId");--> statement-breakpoint
 CREATE INDEX "AuditLogs_UserId_idx" ON "audit"."AuditLogs" USING btree ("UserId");--> statement-breakpoint
@@ -907,4 +1075,34 @@ CREATE INDEX "TransactionRefunds_Status_idx" ON "payments"."TransactionRefunds" 
 CREATE INDEX "BusinessSettings_BusinessId_idx" ON "settings"."BusinessSettings" USING btree ("BusinessId");--> statement-breakpoint
 CREATE INDEX "ReceiptSettings_BusinessId_idx" ON "settings"."ReceiptSettings" USING btree ("BusinessId");--> statement-breakpoint
 CREATE INDEX "ReceiptSettings_StoreId_idx" ON "settings"."ReceiptSettings" USING btree ("StoreId");--> statement-breakpoint
+
+CREATE INDEX "DiningTables_BusinessId_idx" ON "core"."DiningTables" USING btree ("BusinessId");--> statement-breakpoint
+CREATE INDEX "DiningTables_StoreId_idx" ON "core"."DiningTables" USING btree ("StoreId");--> statement-breakpoint
+CREATE INDEX "DiningTables_IsActive_idx" ON "core"."DiningTables" USING btree ("IsActive");--> statement-breakpoint
+CREATE INDEX "DiningTables_QrType_idx" ON "core"."DiningTables" USING btree ("QrType");--> statement-breakpoint
+CREATE UNIQUE INDEX "DiningTables_GeneralQR_Store_key" ON "core"."DiningTables" USING btree ("StoreId") WHERE "QrType" = 'GENERAL';--> statement-breakpoint
+CREATE INDEX "Orders_BusinessId_idx" ON "transactions"."Orders" USING btree ("BusinessId");--> statement-breakpoint
+CREATE INDEX "Orders_StoreId_idx" ON "transactions"."Orders" USING btree ("StoreId");--> statement-breakpoint
+CREATE INDEX "Orders_Status_idx" ON "transactions"."Orders" USING btree ("OrderStatus");--> statement-breakpoint
+CREATE INDEX "Orders_PaymentStatus_idx" ON "transactions"."Orders" USING btree ("PaymentStatus");--> statement-breakpoint
+CREATE INDEX "Orders_Source_idx" ON "transactions"."Orders" USING btree ("OrderSource");--> statement-breakpoint
+CREATE INDEX "Orders_CreatedAt_idx" ON "transactions"."Orders" USING btree ("CreatedAt");--> statement-breakpoint
+CREATE INDEX "Orders_DiningTableId_idx" ON "transactions"."Orders" USING btree ("DiningTableId");--> statement-breakpoint
+CREATE INDEX "OrderItems_OrderId_idx" ON "transactions"."OrderItems" USING btree ("OrderId");--> statement-breakpoint
+CREATE INDEX "OrderItems_ProductId_idx" ON "transactions"."OrderItems" USING btree ("ProductId");--> statement-breakpoint
+CREATE INDEX "OrderStatusHistory_OrderId_idx" ON "transactions"."OrderStatusHistory" USING btree ("OrderId");--> statement-breakpoint
+CREATE INDEX "OrderStatusHistory_CreatedAt_idx" ON "transactions"."OrderStatusHistory" USING btree ("CreatedAt");--> statement-breakpoint
+CREATE INDEX "GuestOrderAccess_OrderId_idx" ON "transactions"."GuestOrderAccess" USING btree ("OrderId");--> statement-breakpoint
+CREATE INDEX "GuestOrderAccess_ExpiresAt_idx" ON "transactions"."GuestOrderAccess" USING btree ("ExpiresAt");--> statement-breakpoint
+CREATE INDEX "InventoryReservations_OrderId_idx" ON "inventory"."InventoryReservations" USING btree ("OrderId");--> statement-breakpoint
+CREATE INDEX "InventoryReservations_ProductId_idx" ON "inventory"."InventoryReservations" USING btree ("ProductId");--> statement-breakpoint
+CREATE INDEX "InventoryReservations_Status_idx" ON "inventory"."InventoryReservations" USING btree ("Status");--> statement-breakpoint
+CREATE INDEX "InventoryReservations_ExpiresAt_idx" ON "inventory"."InventoryReservations" USING btree ("ExpiresAt");--> statement-breakpoint
+CREATE INDEX "CheckoutIdempotency_OrderId_idx" ON "transactions"."CheckoutIdempotency" USING btree ("OrderId");--> statement-breakpoint
+CREATE INDEX "Payments_OrderId_idx" ON "payments"."Payments" USING btree ("OrderId");--> statement-breakpoint
+CREATE INDEX "Payments_ProviderReference_idx" ON "payments"."Payments" USING btree ("ProviderReference");--> statement-breakpoint
 CREATE INDEX "StoreSettings_BusinessId_idx" ON "settings"."StoreSettings" USING btree ("BusinessId");
+--> statement-breakpoint
+INSERT INTO "lookups"."PaymentMethods" ("Code","Name","IsActive","RequiresReference","SortOrder","CreatedAt","UpdatedAt")
+VALUES ('manual_transfer','Transfer Manual',true,true,4,now(),now())
+ON CONFLICT ("Code") DO NOTHING;

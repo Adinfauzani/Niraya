@@ -1,6 +1,5 @@
-import { and, desc, eq, gte, ilike, inArray, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 
-import { BUSINESS_SETTINGS } from "@/lib/business-seed";
 import type {
   BusinessSettings,
   Category,
@@ -40,7 +39,9 @@ export type BusinessData = {
   staff: Staff[];
   transactions: Transaction[];
   movements: StockMovement[];
-  settings: BusinessSettings;
+  /** Null when persisted business settings are not initialized yet. */
+  settings: BusinessSettings | null;
+  settingsState: "ready" | "uninitialized";
 };
 
 export type BusinessQuery = {
@@ -89,6 +90,70 @@ async function upsertInventory(
         updatedAt: new Date(),
       },
     });
+}
+
+async function loadBusinessSettingsSafe(): Promise<Record<string, any> | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(businessSettings)
+      .where(eq(businessSettings.id, "default"))
+      .limit(1);
+    return (rows[0] as any) ?? null;
+  } catch {
+    try {
+      const result = await db.execute(sql`
+        select "Id", "BusinessId", "BusinessName", "Address", "Phone", "Email", "Currency", "Timezone",
+               "TaxRate", "MemberDiscountRate", "LowStockThreshold", "LegacyReceiptFooter",
+               "QrOrderingEnabled", "QrManualTransferEnabled", "ManualTransferBankName",
+               "ManualTransferAccountName", "ManualTransferAccountNumber", "ManualTransferInstructions",
+               "ReservationExpiryMinutes", "PaymentGatewayModuleStatus", "CreatedAt", "UpdatedAt"
+        from "settings"."BusinessSettings" where "Id" = 'default' limit 1
+      `);
+      const row = (result as any)?.rows?.[0] ?? (Array.isArray(result) ? result[0] : null);
+      if (row) return row;
+    } catch {}
+    try {
+      const result = await db.execute(sql`
+        select "Id", "BusinessName", "Address", "Phone", "Email", "Currency", "Timezone",
+               "TaxRate", "MemberDiscountRate", "LowStockThreshold", "LegacyReceiptFooter"
+        from "settings"."BusinessSettings" where "Id" = 'default' limit 1
+      `);
+      const row = (result as any)?.rows?.[0] ?? (Array.isArray(result) ? result[0] : null);
+      return row ?? null;
+    } catch (error: any) {
+      console.error("BusinessSettings load fallback failed:", error?.message || error);
+      return null;
+    }
+  }
+}
+
+async function loadReceiptFooterSafe(): Promise<string | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(receiptSettings)
+      .where(
+        and(
+          eq(receiptSettings.businessId, DEFAULT_BUSINESS_ID),
+          eq(receiptSettings.storeId, DEFAULT_STORE_ID)
+        )
+      )
+      .limit(1);
+    return rows[0]?.footer ?? null;
+  } catch {
+    try {
+      const result = await db.execute(sql`
+        select "Footer" as footer from "settings"."ReceiptSettings"
+        where "BusinessId" = ${DEFAULT_BUSINESS_ID}::uuid and "StoreId" = ${DEFAULT_STORE_ID}::uuid
+        limit 1
+      `);
+      const row = (result as any)?.rows?.[0] ?? (Array.isArray(result) ? result[0] : null);
+      return (row?.footer ?? row?.Footer ?? null) as string | null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export async function getBusinessData(query: BusinessQuery = {}): Promise<BusinessData> {
@@ -167,8 +232,8 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
     productRows,
     customerRows,
     staffRows,
-    settingsRows,
-    receiptRows,
+    settingsRowRaw,
+    receiptFooterRaw,
     transactionRows,
     itemRows,
     movementRows,
@@ -195,19 +260,8 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
       .where(and(...staffFilters))
       .limit(pageSize)
       .offset(offset),
-    db
-      .select()
-      .from(businessSettings)
-      .where(eq(businessSettings.id, "default")),
-    db
-      .select()
-      .from(receiptSettings)
-      .where(
-        and(
-          eq(receiptSettings.businessId, DEFAULT_BUSINESS_ID),
-          eq(receiptSettings.storeId, DEFAULT_STORE_ID)
-        )
-      ),
+    loadBusinessSettingsSafe(),
+    loadReceiptFooterSafe(),
     db
       .select()
       .from(transactions)
@@ -282,23 +336,29 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-  const settingsRow = settingsRows[0];
-  const receiptRow = receiptRows[0];
-  const mappedSettings: BusinessSettings = settingsRow
+  const settingsRow = settingsRowRaw as any;
+  const receiptFooter = receiptFooterRaw ?? settingsRow?.legacyReceiptFooter ?? settingsRow?.LegacyReceiptFooter ?? "";
+  const mappedSettings: BusinessSettings | null = settingsRow
     ? {
-        businessName: settingsRow.businessName,
-        address: settingsRow.address,
-        phone: settingsRow.phone,
-        email: settingsRow.email,
-        currency: settingsRow.currency,
-        timezone: settingsRow.timezone,
-        taxRate: number(settingsRow.taxRate),
-        memberDiscountRate: number(settingsRow.memberDiscountRate),
-        lowStockThreshold: settingsRow.lowStockThreshold,
-        receiptFooter:
-          receiptRow?.footer ?? settingsRow.legacyReceiptFooter ?? "",
+        businessName: settingsRow.businessName ?? settingsRow.BusinessName ?? "",
+        address: settingsRow.address ?? settingsRow.Address ?? "",
+        phone: settingsRow.phone ?? settingsRow.Phone ?? "",
+        email: settingsRow.email ?? settingsRow.Email ?? "",
+        currency: settingsRow.currency ?? settingsRow.Currency ?? "IDR",
+        timezone: settingsRow.timezone ?? settingsRow.Timezone ?? "Asia/Jakarta",
+        taxRate: number(settingsRow.taxRate ?? settingsRow.TaxRate),
+        memberDiscountRate: number(settingsRow.memberDiscountRate ?? settingsRow.MemberDiscountRate),
+        lowStockThreshold: Number(settingsRow.lowStockThreshold ?? settingsRow.LowStockThreshold ?? 0),
+        receiptFooter,
+        qrOrderingEnabled: !!(settingsRow.qrOrderingEnabled ?? settingsRow.QrOrderingEnabled),
+        qrManualTransferEnabled: !!(settingsRow.qrManualTransferEnabled ?? settingsRow.QrManualTransferEnabled),
+        manualTransferBankName: (settingsRow.manualTransferBankName ?? settingsRow.ManualTransferBankName ?? "") as string,
+        manualTransferAccountName: (settingsRow.manualTransferAccountName ?? settingsRow.ManualTransferAccountName ?? "") as string,
+        manualTransferAccountNumber: (settingsRow.manualTransferAccountNumber ?? settingsRow.ManualTransferAccountNumber ?? "") as string,
+        manualTransferInstructions: (settingsRow.manualTransferInstructions ?? settingsRow.ManualTransferInstructions ?? "") as string,
+        reservationExpiryMinutes: Number(settingsRow.reservationExpiryMinutes ?? settingsRow.ReservationExpiryMinutes ?? 30),
       }
-    : BUSINESS_SETTINGS;
+    : null;
 
   return {
     categories: categoryRows
@@ -372,6 +432,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       ),
     settings: mappedSettings,
+    settingsState: mappedSettings ? "ready" : "uninitialized",
   };
 }
 
@@ -782,11 +843,14 @@ export async function mutateBusiness(
         .limit(1);
 
       const current = existing[0];
-      const values = {
-        businessName:
-          patch.businessName ??
-          current?.businessName ??
-          BUSINESS_SETTINGS.businessName,
+      const requiredForInit = String(patch.businessName ?? current?.businessName ?? "").trim();
+      if (!current && !requiredForInit) {
+        throw new Error(
+          "Pengaturan bisnis belum diinisialisasi. Lengkapi profil bisnis terlebih dahulu."
+        );
+      }
+      const values: any = {
+        businessName: requiredForInit || current.businessName,
         address: patch.address ?? current?.address ?? "",
         phone: patch.phone ?? current?.phone ?? "",
         email: patch.email ?? current?.email ?? "",
@@ -797,9 +861,16 @@ export async function mutateBusiness(
           patch.memberDiscountRate ?? current?.memberDiscountRate ?? 0
         ),
         lowStockThreshold:
-          patch.lowStockThreshold ?? current?.lowStockThreshold ?? 10,
+          patch.lowStockThreshold ?? current?.lowStockThreshold ?? 0,
         updatedAt: new Date(),
       };
+      if (patch.qrOrderingEnabled !== undefined) values.qrOrderingEnabled = !!patch.qrOrderingEnabled;
+      if (patch.qrManualTransferEnabled !== undefined) values.qrManualTransferEnabled = !!patch.qrManualTransferEnabled;
+      if (patch.manualTransferBankName !== undefined) values.manualTransferBankName = String(patch.manualTransferBankName || "").trim() || null;
+      if (patch.manualTransferAccountName !== undefined) values.manualTransferAccountName = String(patch.manualTransferAccountName || "").trim() || null;
+      if (patch.manualTransferAccountNumber !== undefined) values.manualTransferAccountNumber = String(patch.manualTransferAccountNumber || "").trim() || null;
+      if (patch.manualTransferInstructions !== undefined) values.manualTransferInstructions = String(patch.manualTransferInstructions || "").trim() || null;
+      if (patch.reservationExpiryMinutes !== undefined) values.reservationExpiryMinutes = Math.max(5, Math.min(1440, Math.floor(Number(patch.reservationExpiryMinutes || 30))));
 
       if (existing.length > 0) {
         await db

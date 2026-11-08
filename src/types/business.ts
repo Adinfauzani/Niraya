@@ -114,7 +114,20 @@ export type BusinessSettings = {
   memberDiscountRate: number
   lowStockThreshold: number
   receiptFooter: string
+  qrOrderingEnabled?: boolean
+  qrManualTransferEnabled?: boolean
+  manualTransferBankName?: string
+  manualTransferAccountName?: string
+  manualTransferAccountNumber?: string
+  manualTransferInstructions?: string
+  reservationExpiryMinutes?: number
 }
+
+/** Explicit state for persisted business configuration. Missing settings
+ *  must be surfaced as uninitialized, not replaced with invented values. */
+export type BusinessSettingsState =
+  | { status: 'ready'; value: BusinessSettings }
+  | { status: 'uninitialized'; value: null }
 
 /** Payload produced by the POS checkout dialog when a payment succeeds. */
 export type CompletedSale = {

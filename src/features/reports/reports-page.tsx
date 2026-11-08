@@ -97,6 +97,8 @@ function buildSeries(
 export function ReportsPage() {
   const { transactions, products, categories, settings } = useBusinessStore()
 
+  const hasAnyTransactions = transactions.length > 0
+
   const [preset, setPreset] = useState<number | null>(30)
   const [from, setFrom] = useState(format(subDays(today, 30), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(today, 'yyyy-MM-dd'))
@@ -150,7 +152,7 @@ export function ReportsPage() {
 
   const handlePrint = () => {
     const ok = printReport({
-      storeName: settings.businessName,
+      storeName: settings?.businessName || "Niraya POS",
       from,
       to,
       revenue: summary.revenue,
@@ -414,8 +416,12 @@ export function ReportsPage() {
             empty={
               <EmptyState
                 icon={PackageIcon}
-                title="Belum ada penjualan"
-                description="Pilih rentang tanggal lain atau proses transaksi di POS."
+                title={hasAnyTransactions ? "Belum ada penjualan" : "Belum ada data penjualan"}
+                description={
+                  hasAnyTransactions
+                    ? "Pilih rentang tanggal lain atau proses transaksi di POS."
+                    : "Setelah ada transaksi selesai, laporan penjualan akan muncul di sini."
+                }
               />
             }
           />

@@ -62,7 +62,9 @@ type BusinessState = {
   staff: Staff[]
   transactions: Transaction[]
   movements: StockMovement[]
-  settings: BusinessSettings
+  settings: BusinessSettings | null
+  settingsState: "ready" | "uninitialized"
+  businessError: string | null
   ready: boolean
 
   hydrate: () => Promise<void>
@@ -144,18 +146,9 @@ export const useBusinessStore = create<BusinessState>()((set, get) => ({
   staff: [],
   transactions: [],
   movements: [],
-  settings: {
-    businessName: 'Niraya POS',
-    address: '',
-    phone: '',
-    email: '',
-    currency: 'IDR',
-    timezone: 'Asia/Jakarta',
-    taxRate: 0,
-    memberDiscountRate: 0,
-    lowStockThreshold: 0,
-    receiptFooter: 'Terima kasih • Niraya',
-  },
+  settings: null,
+  settingsState: "uninitialized",
+  businessError: null,
   ready: false,
 
   hydrate: async () => {
@@ -560,7 +553,11 @@ export const useBusinessStore = create<BusinessState>()((set, get) => ({
   },
 
   updateSettings: (patch) => {
-    set((state) => ({ settings: { ...state.settings, ...patch } }))
+    set((state) => ({
+      settings: { ...(state.settings ?? { businessName: "", address: "", phone: "", email: "", currency: "IDR", timezone: "Asia/Jakarta", taxRate: 0, memberDiscountRate: 0, lowStockThreshold: 0, receiptFooter: "" }), ...patch },
+      settingsState: "ready",
+      businessError: null,
+    }))
     void sync('settings.update', patch)
   },
 }))

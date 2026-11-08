@@ -147,10 +147,13 @@ export const ACTION_ROLES: Record<string, UserRole> = {
   "customer.create": "manager",
   "customer.update": "manager",
   "customer.delete": "owner",
-  // Staf
+  // Staf operasional (tabel staff)
   "staff.create": "admin",
   "staff.update": "admin",
   "staff.delete": "owner",
+  // User login/app profile roles (core.UserProfiles). Admin can assign; owner protects last-owner.
+  "user.role.update": "admin",
+  "user.profile.delete": "admin",
   // Stok
   "stock.adjust": "manager",
   // QR ordering

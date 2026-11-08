@@ -446,23 +446,31 @@ export function InventoryPage() {
               rows={productRows}
               getRowKey={(product) => product.id}
               empty={
-                <EmptyState
-                  icon={BoxesIcon}
-                  title="Tidak ada produk yang cocok"
-                  description="Coba ubah pencarian atau filter stok."
-                  action={
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSearch('')
-                        setCategoryId('all')
-                        setStockFilter('all')
-                      }}
-                    >
-                      Reset filter
-                    </Button>
-                  }
-                />
+                products.length === 0 ? (
+                  <EmptyState
+                    icon={BoxesIcon}
+                    title="Belum ada produk"
+                    description="Tambahkan produk terlebih dahulu untuk memantau stok."
+                  />
+                ) : (
+                  <EmptyState
+                    icon={BoxesIcon}
+                    title="Tidak ada produk yang cocok"
+                    description="Coba ubah pencarian atau filter stok."
+                    action={
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSearch('')
+                          setCategoryId('all')
+                          setStockFilter('all')
+                        }}
+                      >
+                        Reset filter
+                      </Button>
+                    }
+                  />
+                )
               }
             />
 
@@ -507,11 +515,19 @@ export function InventoryPage() {
               rows={historyRows}
               getRowKey={(movement) => movement.id}
               empty={
-                <EmptyState
-                  icon={ClipboardListIcon}
-                  title="Belum ada pergerakan stok"
-                  description="Penyesuaian stok dan penjualan akan muncul di sini."
-                />
+                movements.length === 0 ? (
+                  <EmptyState
+                    icon={ClipboardListIcon}
+                    title="Belum ada pergerakan stok"
+                    description="Penyesuaian stok dan penjualan akan muncul di sini."
+                  />
+                ) : (
+                  <EmptyState
+                    icon={ClipboardListIcon}
+                    title="Riwayat tidak ditemukan"
+                    description="Coba ubah pencarian atau filter riwayat."
+                  />
+                )
               }
             />
 
