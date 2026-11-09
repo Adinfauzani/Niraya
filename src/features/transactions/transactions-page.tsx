@@ -275,12 +275,18 @@ export function TransactionsPage() {
           empty={
             <EmptyState
               icon={SearchXIcon}
-              title="Tidak ada transaksi"
-              description="Belum ada transaksi yang cocok dengan filter ini. Coba ubah rentang tanggal atau reset filter."
+              title={transactions.length === 0 ? "Belum ada transaksi" : "Tidak ada transaksi"}
+              description={
+                transactions.length === 0
+                  ? "Transaksi yang selesai atau dibatalkan akan muncul di sini."
+                  : "Belum ada transaksi yang cocok dengan filter ini. Coba ubah rentang tanggal atau reset filter."
+              }
               action={
-                <Button variant="outline" onClick={resetFilters}>
-                  Reset filter
-                </Button>
+                transactions.length > 0 ? (
+                  <Button variant="outline" onClick={resetFilters}>
+                    Reset filter
+                  </Button>
+                ) : undefined
               }
             />
           }

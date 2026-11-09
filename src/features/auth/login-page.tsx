@@ -27,7 +27,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { authClient } from '@/lib/auth-client'
+import { supabaseClient } from '@/lib/auth-client'
 
 const loginSchema = z.object({
   email: z
@@ -73,14 +73,17 @@ export function LoginPage() {
 
   const onSubmit = async (values: LoginValues) => {
     try {
-      const result = await authClient.signIn.email(values)
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      })
 
-      if (result?.error) {
+      if (error) {
         form.setError('password', {
-          message: result.error.message || 'Email atau kata sandi salah.',
+          message: error.message || 'Email atau kata sandi salah.',
         })
         toast.error('Gagal masuk', {
-          description: result.error.message || 'Email atau kata sandi salah.',
+          description: error.message || 'Email atau kata sandi salah.',
         })
         return
       }

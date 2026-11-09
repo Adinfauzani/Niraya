@@ -153,6 +153,8 @@ export const transactionItems = s.table(
   ]
 );
 
+import { orders } from "./orders";
+
 /** Idempotency key untuk checkout POS. */
 export const checkoutIdempotency = s.table(
   "CheckoutIdempotency",
@@ -162,6 +164,10 @@ export const checkoutIdempotency = s.table(
     transactionId: text("TransactionId").references(() => transactions.id, {
       onDelete: "set null",
     }),
+    orderId: text("OrderId").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    scope: text("Scope"),
     response: text("Response"),
     createdAt: timestamp("CreatedAt", { withTimezone: true })
       .defaultNow()
@@ -170,6 +176,26 @@ export const checkoutIdempotency = s.table(
   },
   (t) => [
     index("CheckoutIdempotency_TransactionId_idx").on(t.transactionId),
+    index("CheckoutIdempotency_OrderId_idx").on(t.orderId),
     index("CheckoutIdempotency_ExpiresAt_idx").on(t.expiresAt),
+  ]
+);
+
+/** Guest order access token hash; raw token never stored. Scoped to one Order. */
+export const guestOrderAccess = s.table(
+  "GuestOrderAccess",
+  {
+    id: uuid("Id").defaultRandom().primaryKey(),
+    orderId: text("OrderId").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    tokenHash: text("TokenHash").notNull(),
+    createdAt: timestamp("CreatedAt", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("ExpiresAt", { withTimezone: true }),
+    revokedAt: timestamp("RevokedAt", { withTimezone: true }),
+    lastUsedAt: timestamp("LastUsedAt", { withTimezone: true }),
+  },
+  (t) => [
+    unique("GuestOrderAccess_TokenHash_key").on(t.tokenHash),
+    index("GuestOrderAccess_OrderId_idx").on(t.orderId),
+    index("GuestOrderAccess_ExpiresAt_idx").on(t.expiresAt),
   ]
 );

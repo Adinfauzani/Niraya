@@ -1,29 +1,35 @@
 "use client";
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from "react";
 import {
   MoreHorizontalIcon,
-  PencilIcon,
-  PlusIcon,
+  RefreshCwIcon,
   ShieldCheckIcon,
   Trash2Icon,
-  UserCheckIcon,
   UserRoundIcon,
   UsersIcon,
-} from 'lucide-react'
-import { toast } from 'sonner'
+} from "lucide-react";
+import { toast } from "sonner";
 
-import { ConfirmDialog } from '@/components/shared/confirm-dialog'
-import { DataTable, type DataTableColumn } from '@/components/shared/data-table'
-import { EmptyState } from '@/components/shared/empty-state'
-import { PageHeader } from '@/components/shared/page-header'
-import { SearchInput } from '@/components/shared/search-input'
-import { StatTile } from '@/components/shared/stat-tile'
-import { StatusBadge } from '@/components/shared/status-badge'
-import { TablePagination } from '@/components/shared/table-pagination'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { SearchInput } from "@/components/shared/search-input";
+import { StatTile } from "@/components/shared/stat-tile";
+import { TablePagination } from "@/components/shared/table-pagination";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,390 +37,264 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { initials } from '@/features/customers/customer-detail-sheet'
-import { usePagination } from '@/hooks/use-pagination'
-import { ROLE_LABELS } from '@/lib/business-labels'
-import { formatDate, formatNumber } from '@/lib/format'
-import { useBusinessStore } from '@/stores/business-store'
-import type { Staff } from '@/types/business'
-import { StaffDetailSheet } from './staff-detail-sheet'
-import { StaffFormDialog, type StaffFormValues } from './staff-form-dialog'
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { initials } from "@/features/customers/customer-detail-sheet";
+import { usePagination } from "@/hooks/use-pagination";
+import { fetchLoginUsers, removeLoginUserProfile, updateLoginUserRole, type LoginUserRow } from "@/lib/api";
+import { APP_ROLE_DESCRIPTIONS, APP_ROLE_LABELS, appRoleLabel } from "@/lib/business-labels";
+import { formatDateTime, formatNumber } from "@/lib/format";
 
-const ROLE_BADGE_VARIANT: Record<
-  Staff['role'],
-  'default' | 'info' | 'warning' | 'secondary'
-> = {
-  owner: 'default',
-  admin: 'info',
-  manager: 'warning',
-  cashier: 'secondary',
+const ROLE_OPTIONS = ["user", "cashier", "manager", "admin", "owner"] as const;
+type AppRole = (typeof ROLE_OPTIONS)[number];
+
+const ROLE_BADGE_VARIANT: Record<AppRole, "default" | "info" | "warning" | "secondary" | "outline"> = {
+  owner: "default",
+  admin: "info",
+  manager: "warning",
+  cashier: "secondary",
+  user: "outline",
+};
+
+function readError(e: unknown, fallback: string) {
+  return e instanceof Error && e.message ? e.message : fallback;
 }
 
-const PERMISSION_ROWS = [
-  { module: 'Dashboard', owner: true, admin: true, manager: true, cashier: true },
-  { module: 'POS', owner: true, admin: true, manager: true, cashier: true },
-  { module: 'Transaksi', owner: true, admin: true, manager: true, cashier: false },
-  { module: 'Produk & kategori', owner: true, admin: true, manager: false, cashier: false },
-  { module: 'Inventori', owner: true, admin: true, manager: true, cashier: false },
-  { module: 'Pelanggan', owner: true, admin: true, manager: true, cashier: false },
-  { module: 'Laporan', owner: true, admin: true, manager: true, cashier: false },
-  { module: 'Staf & pengaturan', owner: true, admin: true, manager: false, cashier: false },
-] as const
-
 export function StaffPage() {
-  const { staff, transactions, addStaff, updateStaff, deleteStaff } =
-    useBusinessStore()
+  const [rows, setRows] = useState<LoginUserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [editing, setEditing] = useState<LoginUserRow | null>(null);
+  const [nextRole, setNextRole] = useState<AppRole>("user");
+  const [savingRole, setSavingRole] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<LoginUserRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const [search, setSearch] = useState('')
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState<Staff | null>(null)
-  const [detailId, setDetailId] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null)
+  async function load() {
+    try {
+      setLoading(true);
+      setError(null);
+      setRows(await fetchLoginUsers());
+    } catch (e) {
+      setError(readError(e, "Gagal memuat pengguna login."));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void load(); }, []);
 
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return staff
-    return staff.filter(
-      (member) =>
-        member.name.toLowerCase().includes(query) ||
-        member.email.toLowerCase().includes(query),
-    )
-  }, [staff, search])
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (roleFilter !== "all" && r.role !== roleFilter) return false;
+      if (!q) return true;
+      return (r.name || "").toLowerCase().includes(q) || (r.email || "").toLowerCase().includes(q) || r.userId.toLowerCase().includes(q);
+    });
+  }, [rows, search, roleFilter]);
 
-  const pagination = usePagination(filtered.length, 10)
-  const rows = filtered.slice(pagination.start, pagination.end)
+  const pagination = usePagination(filtered.length, 15);
+  const pageRows = filtered.slice(pagination.start, pagination.end);
+  const ownerCount = rows.filter((r) => r.role === "owner").length;
+  const activeOpsCount = rows.filter((r) => ["cashier", "manager", "admin", "owner"].includes(r.role)).length;
+  const basicUserCount = rows.filter((r) => r.role === "user").length;
 
-  const detailMember = staff.find((member) => member.id === detailId) ?? null
-
-  const activeCount = staff.filter((member) => member.status === 'active').length
-  const cashierCount = staff.filter(
-    (member) => member.role === 'cashier' && member.status === 'active',
-  ).length
-  const adminCount = staff.filter(
-    (member) =>
-      (member.role === 'owner' || member.role === 'admin') &&
-      member.status === 'active',
-  ).length
-
-  const openCreate = () => {
-    setEditing(null)
-    setFormOpen(true)
+  function openEdit(row: LoginUserRow) {
+    setEditing(row);
+    setNextRole(row.role);
   }
 
-  const openEdit = (member: Staff) => {
-    setDetailId(null)
-    setEditing(member)
-    setFormOpen(true)
-  }
-
-  const handleSubmit = (values: StaffFormValues) => {
-    const duplicate = staff.some(
-      (member) =>
-        member.id !== editing?.id &&
-        member.email.toLowerCase() === values.email.trim().toLowerCase(),
-    )
-    if (duplicate) {
-      toast.error('Email sudah dipakai staf lain')
-      return false
-    }
-
-    if (editing) {
-      updateStaff(editing.id, values)
-      toast.success('Data staf diperbarui', { description: values.name })
-    } else {
-      addStaff(values)
-      toast.success('Staf ditambahkan', { description: values.name })
-    }
-    return true
-  }
-
-  const handleDelete = () => {
-    if (!deleteTarget) return
-    const result = deleteStaff(deleteTarget.id)
-    if (result.ok) {
-      toast.success('Staf dihapus', { description: deleteTarget.name })
-      setDeleteTarget(null)
-    } else {
-      toast.error('Tidak bisa menghapus staf', {
-        description: result.reason,
-      })
+  async function saveRole() {
+    if (!editing) return;
+    setSavingRole(true);
+    try {
+      await updateLoginUserRole(editing.userId, nextRole);
+      toast.success("Role pengguna diperbarui", { description: `${editing.name || editing.email || editing.userId} → ${appRoleLabel(nextRole)}` });
+      setEditing(null);
+      await load();
+    } catch (e) {
+      toast.error("Gagal memperbarui role", { description: readError(e, "Silakan coba lagi.") });
+    } finally {
+      setSavingRole(false);
     }
   }
 
-  const columns: DataTableColumn<Staff>[] = [
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await removeLoginUserProfile(deleteTarget.userId);
+      toast.success("Profil akses dihapus", { description: "Akun Neon Auth tidak dihapus; jika login lagi, profil dasar dapat dibuat ulang." });
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      toast.error("Gagal menghapus profil", { description: readError(e, "Silakan coba lagi.") });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const columns: DataTableColumn<LoginUserRow>[] = [
     {
-      key: 'staff',
-      header: 'Staf',
-      cell: (member) => (
+      key: "user",
+      header: "Pengguna login",
+      cell: (row) => (
         <div className="flex items-center gap-3">
           <Avatar className="size-8">
-            <AvatarFallback className="text-[11px] font-semibold">
-              {initials(member.name)}
-            </AvatarFallback>
+            <AvatarFallback className="text-[11px] font-semibold">{initials(row.name || row.email || "U")}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate font-medium">{member.name}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {member.email}
-            </p>
+            <p className="truncate font-medium">{row.name || "Tanpa nama"}</p>
+            <p className="truncate text-xs text-muted-foreground">{row.email || row.userId}</p>
           </div>
         </div>
       ),
     },
     {
-      key: 'role',
-      header: 'Peran',
-      cell: (member) => (
-        <Badge variant={ROLE_BADGE_VARIANT[member.role]}>
-          {ROLE_LABELS[member.role]}
-        </Badge>
-      ),
+      key: "role",
+      header: "Role",
+      cell: (row) => <Badge variant={ROLE_BADGE_VARIANT[row.role]}>{appRoleLabel(row.role)}</Badge>,
     },
     {
-      key: 'status',
-      header: 'Status',
-      cell: (member) => <StatusBadge status={member.status} />,
+      key: "id",
+      header: "User ID",
+      headerClassName: "hidden xl:table-cell",
+      className: "hidden font-mono text-[11px] text-muted-foreground xl:table-cell",
+      cell: (row) => <span className="block max-w-[220px] truncate" title={row.userId}>{row.userId}</span>,
     },
     {
-      key: 'joined',
-      header: 'Bergabung',
-      headerClassName: 'hidden md:table-cell',
-      className: 'hidden text-xs text-muted-foreground md:table-cell',
-      cell: (member) => formatDate(member.joinedAt),
+      key: "updated",
+      header: "Diperbarui",
+      headerClassName: "hidden md:table-cell",
+      className: "hidden text-xs text-muted-foreground md:table-cell",
+      cell: (row) => (row.updatedAt ? formatDateTime(row.updatedAt) : "-"),
     },
     {
-      key: 'last',
-      header: 'Terakhir aktif',
-      headerClassName: 'hidden sm:table-cell',
-      className: 'hidden text-xs text-muted-foreground sm:table-cell',
-      cell: (member) =>
-        member.lastActive ? formatDate(member.lastActive) : 'Belum pernah',
-    },
-    {
-      key: 'actions',
+      key: "actions",
       header: <span className="sr-only">Aksi</span>,
-      headerClassName: 'w-10',
-      className: 'text-right',
-      cell: (member) => (
-        <div onClick={(event) => event.stopPropagation()}>
+      headerClassName: "w-10",
+      className: "text-right",
+      cell: (row) => (
+        <div onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Aksi untuk ${member.name}`}
-              >
+              <Button variant="ghost" size="icon-sm" aria-label={`Aksi untuk ${row.name || row.email || row.userId}`}>
                 <MoreHorizontalIcon aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Aksi staf</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => setDetailId(member.id)}>
-                <UserRoundIcon aria-hidden="true" />
-                Lihat detail
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openEdit(member)}>
-                <PencilIcon aria-hidden="true" />
-                Edit
+              <DropdownMenuLabel>Akses pengguna</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => openEdit(row)}>
+                <UserRoundIcon aria-hidden="true" />Ubah role
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => setDeleteTarget(member)}
-              >
-                <Trash2Icon aria-hidden="true" />
-                Hapus
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(row)}>
+                <Trash2Icon aria-hidden="true" />Hapus profil akses
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       ),
     },
-  ]
+  ];
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Staf"
-        description="Kelola anggota tim, peran, dan status akses mereka."
+        title="Staff / Akses Pengguna"
+        description="Daftar akun yang pernah login (core.UserProfiles). Ubah role aplikasi dengan aman; identitas login tetap dikelola Neon Auth."
         actions={
-          <Button onClick={openCreate}>
-            <PlusIcon aria-hidden="true" />
-            Tambah staf
+          <Button variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCwIcon className={loading ? "animate-spin" : ""} aria-hidden="true" />Muat ulang
           </Button>
         }
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile
-          label="Total staf"
-          value={formatNumber(staff.length)}
-          hint={`${formatNumber(activeCount)} aktif`}
-          icon={UsersIcon}
-        />
-        <StatTile
-          label="Kasir aktif"
-          value={formatNumber(cashierCount)}
-          hint="Siap melayani POS"
-          icon={UserCheckIcon}
-          tone="success"
-        />
-        <StatTile
-          label="Admin & owner"
-          value={formatNumber(adminCount)}
-          hint="Akses penuh"
-          icon={ShieldCheckIcon}
-          tone="info"
-        />
-        <StatTile
-          label="Nonaktif"
-          value={formatNumber(staff.length - activeCount)}
-          hint="Tidak bisa masuk"
-          icon={UserRoundIcon}
-          tone="warning"
-        />
+        <StatTile label="Pengguna terdaftar" value={formatNumber(rows.length)} hint="Profil login aplikasi" icon={UsersIcon} />
+        <StatTile label="Akses operasional" value={formatNumber(activeOpsCount)} hint="Owner/admin/manager/kasir" icon={ShieldCheckIcon} tone="info" />
+        <StatTile label="User dasar" value={formatNumber(basicUserCount)} hint="Role default setelah login" icon={UserRoundIcon} />
+        <StatTile label="Owner" value={formatNumber(ownerCount)} hint="Owner terakhir dilindungi" icon={ShieldCheckIcon} tone="warning" />
       </section>
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-2 border-b border-border p-4 sm:flex-row sm:items-center">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Cari nama atau email…"
-            className="sm:max-w-sm"
+          <SearchInput value={search} onChange={setSearch} placeholder="Cari nama, email, atau user ID…" className="sm:max-w-sm" />
+          <div className="sm:ml-auto sm:w-[180px]">
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger aria-label="Filter role"><SelectValue placeholder="Semua role" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua role</SelectItem>
+                {ROLE_OPTIONS.map((role) => <SelectItem key={role} value={role}>{APP_ROLE_LABELS[role]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground">{formatNumber(filtered.length)} pengguna</p>
+        </div>
+
+        {error ? (
+          <div className="p-4"><ErrorState title="Gagal memuat pengguna" description={error} onRetry={() => void load()} /></div>
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={pageRows}
+            getRowKey={(row) => row.userId}
+            empty={loading ? <EmptyState icon={UsersIcon} title="Memuat pengguna…" description="Mengambil data profil login." /> : (
+              <EmptyState icon={UsersIcon} title={rows.length === 0 ? "Belum ada pengguna login" : "Pengguna tidak ditemukan"} description={rows.length === 0 ? "Profil dibuat otomatis saat akun login melalui Neon Auth." : "Coba kata kunci atau filter lain."} />
+            )}
           />
-          <p className="text-xs text-muted-foreground sm:ml-auto">
-            {formatNumber(filtered.length)} staf
-          </p>
-        </div>
+        )}
 
-        <DataTable
-          columns={columns}
-          rows={rows}
-          getRowKey={(member) => member.id}
-          onRowClick={(member) => setDetailId(member.id)}
-          empty={
-            staff.length === 0 ? (
-              <EmptyState
-                icon={UsersIcon}
-                title="Belum ada staf"
-                description="Tambahkan anggota tim agar operasional bisa dibagi."
-                action={
-                  <Button onClick={openCreate}>
-                    <PlusIcon aria-hidden="true" />
-                    Tambah staf
-                  </Button>
-                }
-              />
-            ) : (
-              <EmptyState
-                icon={UsersIcon}
-                title="Staf tidak ditemukan"
-                description="Coba kata kunci lain."
-                action={
-                  <Button variant="outline" onClick={() => setSearch('')}>
-                    Reset pencarian
-                  </Button>
-                }
-              />
-            )
-          }
-        />
-
-        <TablePagination
-          page={pagination.page}
-          pageCount={pagination.pageCount}
-          total={filtered.length}
-          start={pagination.start}
-          end={pagination.end}
-          onPageChange={pagination.setPage}
-        />
+        <TablePagination page={pagination.page} pageCount={pagination.pageCount} total={filtered.length} start={pagination.start} end={pagination.end} onPageChange={pagination.setPage} />
       </section>
 
-      <section className="rounded-xl border border-border bg-card">
-        <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold">Peran & izin</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Matriks ini menjadi acuan pembatasan modul. Penegakan otomatis aktif
-            setelah autentikasi backend terpasang.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2 font-medium">Modul</th>
-                <th className="px-3 py-2 text-center font-medium">Owner</th>
-                <th className="px-3 py-2 text-center font-medium">Admin</th>
-                <th className="px-3 py-2 text-center font-medium">Manager</th>
-                <th className="px-3 py-2 text-center font-medium">Kasir</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PERMISSION_ROWS.map((row) => (
-                <tr key={row.module} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-2 text-muted-foreground">{row.module}</td>
-                  {(['owner', 'admin', 'manager', 'cashier'] as const).map(
-                    (role) => (
-                      <td key={role} className="px-3 py-2 text-center">
-                        {row[role] ? (
-                          <span
-                            className="text-success"
-                            aria-label={`${role} diizinkan`}
-                          >
-                            ●
-                          </span>
-                        ) : (
-                          <span
-                            className="text-muted-foreground/40"
-                            aria-label={`${role} tidak diizinkan`}
-                          >
-                            —
-                          </span>
-                        )}
-                      </td>
-                    ),
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <StaffFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        member={editing}
-        onSubmit={handleSubmit}
-      />
-
-      <StaffDetailSheet
-        member={detailMember}
-        transactions={transactions}
-        open={detailId !== null}
-        onOpenChange={(open) => {
-          if (!open) setDetailId(null)
-        }}
-        onEdit={openEdit}
-      />
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ubah role pengguna</DialogTitle>
+            <DialogDescription>Perubahan disimpan ke <code>core.UserProfiles</code>. Kredensial/login tetap di Neon Auth.</DialogDescription>
+          </DialogHeader>
+          {editing ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-sm">
+                <div className="font-medium">{editing.name || "Tanpa nama"}</div>
+                <div className="text-muted-foreground">{editing.email || editing.userId}</div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-role">Role aplikasi</Label>
+                <Select value={nextRole} onValueChange={(v) => setNextRole(v as AppRole)}>
+                  <SelectTrigger id="user-role"><SelectValue /></SelectTrigger>
+                  <SelectContent>{ROLE_OPTIONS.map((role) => <SelectItem key={role} value={role}>{APP_ROLE_LABELS[role]}</SelectItem>)}</SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{APP_ROLE_DESCRIPTIONS[nextRole]}</p>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={savingRole}>Batal</Button>
+            <Button onClick={() => void saveRole()} disabled={savingRole || !editing || editing.role === nextRole}>{savingRole ? "Menyimpan…" : "Simpan role"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
-        }}
-        title="Hapus staf?"
-        description={
-          deleteTarget
-            ? `${deleteTarget.name} akan dihapus dari daftar staf. Akun owner tidak bisa dihapus.`
-            : ''
-        }
-        confirmLabel="Hapus staf"
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Hapus profil akses pengguna?"
+        description={deleteTarget ? `Profil aplikasi untuk ${deleteTarget.name || deleteTarget.email || deleteTarget.userId} akan dihapus. Akun Neon Auth tidak dihapus; jika login lagi, sistem dapat membuat profil dasar baru.` : ""}
+        confirmLabel={deleting ? "Menghapus…" : "Hapus profil"}
         destructive
-        onConfirm={handleDelete}
+        onConfirm={() => void confirmDelete()}
       />
     </div>
-  )
+  );
 }

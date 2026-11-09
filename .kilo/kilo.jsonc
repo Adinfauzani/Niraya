@@ -1,0 +1,38 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "permission": {
+    "bash": {
+      "smithery *": "allow",
+      "head *": "allow",
+      "node *": "allow"
+    },
+    "external_directory": { "/tmp/*": "allow" },
+    "*": { "*": "allow" },
+    "read": { "*": "allow" }
+  },
+  "provider": {
+    "ninerouter": {
+      "name": "9Router",
+      "options": {
+        "baseURL": "http://localhost:20128/v1",
+        "apiKey": "sk-c604c561a2547f78-15zh8m-a9306ff8"
+      },
+      "models": {
+        "FullMalas": {
+          "name": "FullMalas"
+        }
+      }
+    }
+  },
+  "model": "ninerouter/FullMalas",
+  "mcp": {
+    "Neon": {
+      "type": "remote",
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {
+        "Authorization": "Bearer napi_usqxjd7b7k6dn5zz6spzr1e2zpq306ch7s6hqt9nru3ms1jlrpa572nus5roip8o"
+      },
+      "enabled": true
+    }
+  }
+}

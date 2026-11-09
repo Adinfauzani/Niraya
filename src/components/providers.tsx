@@ -30,42 +30,47 @@ export function BusinessDataProvider({
     // mutation, or recovery from a transient auth error).
     if (data) {
       useBusinessStore.setState({
-        ...data,
+        categories: data.categories ?? [],
+        products: data.products ?? [],
+        customers: data.customers ?? [],
+        staff: data.staff ?? [],
+        transactions: data.transactions ?? [],
+        movements: data.movements ?? [],
+        settings: data.settings ?? null,
+        settingsState: data.settings ? "ready" : "uninitialized",
+        businessError: null,
         ready: true,
       })
       return
     }
 
-    // Query settled without data — mark ready so the UI can render an empty
-    // state instead of spinning forever.
-    if (!isPending && !ready) {
-      useBusinessStore.setState({
-        categories: [],
-        products: [],
-        customers: [],
-        staff: [],
-        transactions: [],
-        movements: [],
-        settings: {
-          businessName: "Niraya POS",
-          address: "",
-          phone: "",
-          email: "",
-          currency: "IDR",
-          timezone: "Asia/Jakarta",
-          taxRate: 0,
-          memberDiscountRate: 0,
-          lowStockThreshold: 0,
-          receiptFooter: "Terima kasih • Niraya",
-        },
-        ready: true,
-      })
+    // A failed request is not an empty database. Keep ready false for
+    // authenticated business surfaces so layouts can show an error/retry state
+    // instead of rendering misleading empty data.
+    if (error) {
+      if (!ready) {
+        useBusinessStore.setState({
+          categories: [],
+          products: [],
+          customers: [],
+          staff: [],
+          transactions: [],
+          movements: [],
+          settings: null,
+          settingsState: "uninitialized",
+          businessError:
+            error instanceof Error
+              ? error.message
+              : "Gagal memuat data bisnis.",
+          ready: false,
+        })
+      }
+      return
     }
-  }, [data, isPending, ready])
 
-  if (error) {
-    console.error("Business data query error:", error)
-  }
+    // No data and no error while pending: wait.
+    if (isPending) return
+  }, [data, error, isPending, ready])
 
   return children
 }

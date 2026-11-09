@@ -1,10 +1,9 @@
-import { auth } from "@/server/auth";
+import { updateSession } from "@/lib/supabase/middleware";
 
-export default auth.middleware({
-  loginUrl: "/login",
-  publicRoutes: ["/login", "/signup", "/profile", "/api/business", "/api/demo/seed"],
-});
+export default updateSession;
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

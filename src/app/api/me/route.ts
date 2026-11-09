@@ -9,21 +9,24 @@ import { ensureUserProfile, normalizeRole } from "@/server/auth/session";
  */
 export async function GET() {
   const session = await getSession();
-  const user =
+  const sessionUser =
     (session as any)?.user ?? (session as any)?.data?.user ?? null;
 
-  if (!user?.id) {
+  if (!sessionUser?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const profile = await ensureUserProfile(user);
+  const profile = await ensureUserProfile(sessionUser);
 
   return NextResponse.json({
     user: {
-      id: String(user.id),
-      name: profile?.name ?? user.name ?? null,
-      email: profile?.email ?? user.email ?? null,
+      id: String(sessionUser.id),
+      name: profile?.name ?? sessionUser.name ?? null,
+      email: profile?.email ?? sessionUser.email ?? null,
+      image: (sessionUser as any).image ?? (sessionUser as any).avatarUrl ?? null,
       role: normalizeRole(profile?.role),
+      createdAt: profile?.createdAt ?? null,
+      updatedAt: profile?.updatedAt ?? null,
     },
   });
 }

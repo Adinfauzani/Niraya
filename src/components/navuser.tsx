@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import {
+  CreditCardIcon,
   EllipsisVerticalIcon,
   HelpCircleIcon,
   LogOutIcon,
@@ -20,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { authClient } from "@/lib/auth-client"
+import { supabaseClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 
 function initials(name: string) {
@@ -51,7 +52,7 @@ export function NavUser({
 
   const handleSignOut = async () => {
     try {
-      await authClient.signOut()
+      await supabaseClient.auth.signOut()
     } finally {
       router.replace("/login")
       router.refresh()
@@ -98,6 +99,10 @@ export function NavUser({
         <DropdownMenuItem onSelect={() => router.push("/profile")}>
           <UserCircleIcon />
           Account
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => router.push("/plans")}>
+          <CreditCardIcon />
+          Plans &amp; Billing
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => router.push("/settings")}>
           <SettingsIcon />

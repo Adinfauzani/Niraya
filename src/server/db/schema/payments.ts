@@ -2,6 +2,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   numeric,
   text,
   timestamp,
@@ -10,41 +11,57 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-import { DEFAULT_BUSINESS_ID, paymentsSchema } from "./schema";
-import { businesses } from "./core";
+import { paymentsSchema } from "./schema";
 import { products } from "./products";
 import { paymentMethods, discounts } from "./lookups";
+import { orders } from "./orders";
 import { transactionItems, transactions } from "./transactions";
 
 const s = paymentsSchema;
 
-/** Pembayaran untuk transaksi; mendukung pembayaran bertahap. */
+/** Pembayaran untuk transaksi; mendukung pembayaran bertahap dan order unified.
+ * QR/manual flow may create payment before legacy financial Transaction exists;
+ * POS Phase 7 always sets transactionId.
+ */
 export const payments = s.table(
   "Payments",
   {
     id: uuid("Id").defaultRandom().primaryKey(),
-    transactionId: text("TransactionId")
-      .notNull()
-      .references(() => transactions.id, { onDelete: "cascade" }),
+    transactionId: text("TransactionId").references(() => transactions.id, {
+      onDelete: "cascade",
+    }),
+    orderId: text("OrderId").references(() => orders.id, { onDelete: "set null" }),
+    channel: text("Channel"),
+    currency: text("Currency").notNull().default("IDR"),
     paymentMethod: text("PaymentMethod")
       .notNull()
       .references(() => paymentMethods.code, { onDelete: "restrict" }),
     amount: numeric("Amount", { precision: 14, scale: 2 }).notNull(),
     referenceNumber: text("ReferenceNumber"),
+    provider: text("Provider"),
+    providerReference: text("ProviderReference"),
+    proofUrl: text("ProofUrl"),
+    proofSubmittedAt: timestamp("ProofSubmittedAt", { withTimezone: true }),
+    verifiedByUserId: text("VerifiedByUserId"),
+    verifiedAt: timestamp("VerifiedAt", { withTimezone: true }),
+    verificationNote: text("VerificationNote"),
+    expiresAt: timestamp("ExpiresAt", { withTimezone: true }),
+    metadata: jsonb("Metadata"),
     status: text("Status").notNull().default("completed"),
-    paidAt: timestamp("PaidAt", { withTimezone: true }).defaultNow().notNull(),
+    paidAt: timestamp("PaidAt", { withTimezone: true }),
     createdAt: timestamp("CreatedAt", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (t) => [
     index("Payments_TransactionId_idx").on(t.transactionId),
+    index("Payments_OrderId_idx").on(t.orderId),
     index("Payments_PaymentMethod_idx").on(t.paymentMethod),
     index("Payments_PaidAt_idx").on(t.paidAt),
     check("Payments_Amount_check", sql`${t.amount} >= 0`),
     check(
       "Payments_Status_check",
-      sql`${t.status} in ('pending', 'completed', 'failed', 'refunded')`,
+      sql`${t.status} in ('pending','completed','failed','refunded','expired','partially_refunded','UNPAID','PENDING','PAID','FAILED','EXPIRED','PARTIALLY_REFUNDED','REFUNDED','WAITING_PROOF','PENDING_VERIFICATION','REJECTED')`,
     ),
   ],
 );

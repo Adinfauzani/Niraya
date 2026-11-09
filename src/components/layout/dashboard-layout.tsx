@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/appsidebar"
 import { AppHeader } from "@/components/layout/app-header"
 import { Providers } from "@/components/providers"
+import { ErrorState } from "@/components/shared/error-state"
+import { queryClient } from "@/lib/query-client"
+import { BUSINESS_QUERY_KEY } from "@/hooks/use-business"
 import { useBusinessStore } from "@/stores/business-store"
 import { useRealUser } from "@/hooks/use-real-user"
 import { cn } from "@/lib/utils"
@@ -39,6 +42,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [resizing, setResizing] = useState(false)
   const hydrate = useBusinessStore((state) => state.hydrate)
   const ready = useBusinessStore((state) => state.ready)
+  const businessError = useBusinessStore((state) => state.businessError)
   const realUser = useRealUser(true)
   const pathname = usePathname()
   const isRegularUser = realUser?.role === "user"
@@ -95,7 +99,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <AppHeader collapsed={collapsed} onToggle={setCollapsed} />
         <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-x-hidden">
           <Providers>
-            {shouldSkipBusinessLoad || ready ? children : <BusinessDataLoader />}
+            {shouldSkipBusinessLoad || ready ? (
+              children
+            ) : businessError ? (
+              <ErrorState
+                title="Data bisnis belum dapat dimuat"
+                description={businessError}
+                onRetry={() => {
+                  queryClient.invalidateQueries({ queryKey: BUSINESS_QUERY_KEY })
+                }}
+              />
+            ) : (
+              <BusinessDataLoader />
+            )}
           </Providers>
         </main>
       </div>

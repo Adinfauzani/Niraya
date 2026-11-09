@@ -74,12 +74,15 @@ export async function GET(request: Request) {
 
     const data = await getBusinessData(parsed.data);
     return NextResponse.json(data);
-  } catch (error: any) {
-    console.error("Business data error:", error);
-    return NextResponse.json(
-      { error: error?.message || "Gagal memuat data." },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const err = error as any;
+    const status = Number(err?.status) || 500;
+    const safeMessage =
+      status >= 500
+        ? "Gagal memuat data bisnis."
+        : err?.message || "Gagal memuat data.";
+    if (status >= 500) console.error("Business data error:", err?.message || err);
+    return NextResponse.json({ error: safeMessage, code: status >= 500 ? "BUSINESS_DATA_LOAD_FAILED" : undefined }, { status });
   }
 }
 
@@ -120,11 +123,11 @@ export async function POST(request: Request) {
       actingUserRole: await getCurrentUserRole(),
     });
     return NextResponse.json(result);
-  } catch (error: any) {
-    console.error("Business mutation error:", error);
-    return NextResponse.json(
-      { error: error?.message || "Gagal menyimpan data." },
-      { status: error?.status ?? 400 }
-    );
+  } catch (error: unknown) {
+    const err = error as any;
+    const status = Number(err?.status) || 400;
+    const message = status >= 500 ? "Gagal menyimpan data." : err?.message || "Gagal menyimpan data.";
+    if (status >= 500) console.error("Business mutation error:", err?.message || err);
+    return NextResponse.json({ error: message }, { status });
   }
 }

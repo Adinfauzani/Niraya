@@ -10,11 +10,13 @@ import {
   EyeOffIcon,
   Loader2Icon,
   UserPlusIcon,
+  AlertCircleIcon,
 } from "lucide-react"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import {
   Field,
   FieldDescription,
@@ -23,7 +25,8 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { authClient } from "@/lib/auth-client"
+import { supabaseClient } from "@/lib/auth-client"
+import { GoogleIcon, AppleIcon } from "@/components/ui/social-icons"
 import { cn } from "@/lib/utils"
 
 const signupSchema = z
@@ -73,19 +76,24 @@ export function SignupForm({
     setFormError("")
 
     try {
-      const result = await authClient.signUp.email({
-        name: values.name,
+      const { error } = await supabaseClient.auth.signUp({
         email: values.email,
         password: values.password,
+        options: {
+          data: {
+            name: values.name,
+          },
+        },
       })
 
-      if (result?.error) {
-        setFormError(result.error.message || "Pendaftaran gagal.")
+      if (error) {
+        setFormError(error.message || "Pendaftaran gagal.")
         return
       }
 
-      const profile = await fetch("/api/me").then((response) => response.json())
-      router.push(profile.user?.role === "user" ? "/profile" : "/dashboard")
+      // Email confirmation required - redirect to check email page
+      sessionStorage.setItem("pending_email", values.email)
+      router.push("/verify")
       router.refresh()
     } catch (error) {
       setFormError(
@@ -94,6 +102,33 @@ export function SignupForm({
           : "Pendaftaran gagal. Silakan coba lagi."
       )
     }
+  }
+
+  const handleGoogleSignUp = async () => {
+    setFormError("")
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) {
+        setFormError(error.message || "Gagal daftar dengan Google.")
+      }
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Gagal daftar dengan Google. Silakan coba lagi."
+      )
+    }
+  }
+
+  const handleAppleSignUp = () => {
+    toast.info("Coming Soon", {
+      description: "Daftar dengan Apple akan segera hadir.",
+    })
   }
 
   return (
@@ -114,7 +149,10 @@ export function SignupForm({
 
       {formError && (
         <Alert variant="destructive">
-          <AlertDescription>{formError}</AlertDescription>
+          <AlertDescription className="flex items-center gap-2">
+            <AlertCircleIcon className="size-4 shrink-0" />
+            {formError}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -199,6 +237,30 @@ export function SignupForm({
           {isSubmitting ? "Memproses..." : "Daftar"}
         </Button>
       </FieldGroup>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleGoogleSignUp}
+          disabled={isSubmitting}
+        >
+          <GoogleIcon className="size-4" />
+          Google
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleAppleSignUp}
+          disabled={isSubmitting}
+        >
+          <AppleIcon className="size-4" />
+          Apple
+        </Button>
+      </div>
 
       <p className="text-center text-sm text-muted-foreground">
         Sudah punya akun?{" "}

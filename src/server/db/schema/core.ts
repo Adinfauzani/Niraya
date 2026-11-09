@@ -148,14 +148,14 @@ export const stores = core.table(
   ]
 );
 
-/** Profil aplikasi untuk identitas Neon Auth.
- * `UserId` menyimpan id user Neon Auth; tidak ada password/credential di sini.
+/** Profil aplikasi untuk identitas Supabase Auth.
+ * Primary key (Id) matches auth.users.id for direct FK relationship.
+ * RLS policies enforce that users can only access their own profile.
  */
 export const userProfiles = core.table(
   "UserProfiles",
   {
-    id: uuid("Id").defaultRandom().primaryKey(),
-    userId: text("UserId").notNull(),
+    id: uuid("Id").primaryKey(),
     name: text("Name"),
     email: text("Email"),
     role: text("Role")
@@ -171,7 +171,6 @@ export const userProfiles = core.table(
     deletedAt: timestamp("DeletedAt", { withTimezone: true }),
   },
   (t) => [
-    unique("UserProfiles_UserId_key").on(t.userId),
     index("UserProfiles_Role_idx").on(t.role),
     index("UserProfiles_Email_idx").on(t.email),
   ]

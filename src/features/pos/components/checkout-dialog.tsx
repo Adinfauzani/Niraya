@@ -103,7 +103,7 @@ export type CheckoutDialogProps = {
   customerId?: string
   customerName: string
   cashierName: string
-  settings: BusinessSettings
+  settings: BusinessSettings | null
   onTableNumberChange: (tableNumber: string) => void
   /**
    * Persist the completed sale. Returns the stored transaction number so the
@@ -327,8 +327,8 @@ function CheckoutBody({
         tableNumber,
         customerName: resolvedCustomerName,
         cashierName,
-        storeName: settings.businessName,
-        receiptFooter: settings.receiptFooter,
+        storeName: settings?.businessName || "Niraya POS",
+        receiptFooter: settings?.receiptFooter || "Terima kasih",
       })
       setStatus('success')
       toast.success('Pembayaran berhasil', {
@@ -696,7 +696,7 @@ function CheckoutBody({
             ) : null}
             <div className="flex items-center justify-between gap-2">
               <dt className="text-muted-foreground">
-                Pajak ({formatNumber(settings.taxRate * 100)}%)
+                Pajak ({formatNumber((settings?.taxRate ?? 0) * 100)}%)
               </dt>
               <dd className="font-medium tabular-nums">
                 {formatCurrency(totals.tax)}

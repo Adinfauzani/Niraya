@@ -223,21 +223,21 @@ export function HelpPage() {
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 />
-                <span className="break-all">{settings.email}</span>
+                <span className="break-all">{settings?.email || "Belum diatur"}</span>
               </li>
               <li className="flex items-start gap-2">
                 <PhoneIcon
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 />
-                <span>{settings.phone}</span>
+                <span>{settings?.phone || "Belum diatur"}</span>
               </li>
               <li className="flex items-start gap-2">
                 <MapPinIcon
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 />
-                <span className="text-muted-foreground">{settings.address}</span>
+                <span className="text-muted-foreground">{settings?.address || "Alamat belum diatur"}</span>
               </li>
             </ul>
           </section>
