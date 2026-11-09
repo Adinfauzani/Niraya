@@ -731,7 +731,7 @@ export function OnboardingDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent 
-        className="max-w-2xl max-h-[90vh] overflow-hidden"
+        className="max-w-[90vw] md:max-w-[80vw] lg:max-w-[75vw] max-h-[95vh] overflow-hidden"
         showCloseButton={false}
       >
         {/* Custom close button */}
@@ -801,7 +801,7 @@ export function OnboardingDialog() {
         </DialogHeader>
 
         {/* Content - scrollable */}
-        <div className="max-h-[55vh] overflow-y-auto pr-2 pb-4">
+        <div className="max-h-[70vh] overflow-y-auto pr-2 pb-4">
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground text-center">
               Langkah {currentStep} dari {STEPS.length}: {STEPS[currentStep - 1].title}
