@@ -1,12 +1,7 @@
-import { redirect } from "next/navigation";
-
-import { getCurrentUserRole } from "@/server/auth/session";
-
 import { DashboardClientPage } from "./dashboard-client-page";
 
-export default async function Page() {
-  const role = await getCurrentUserRole();
-  if (role === "user") redirect("/profile");
-
+export default function Page() {
+  // Onboarding is now handled client-side via dialog
+  // The client page checks /api/onboarding/status and shows dialog if needed
   return <DashboardClientPage />;
 }
