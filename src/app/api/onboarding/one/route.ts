@@ -106,8 +106,18 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Onboarding step 1 error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = (error as any)?.code;
+    const errorDetail = (error as any)?.detail;
+    const errorConstraint = (error as any)?.constraint;
     return NextResponse.json(
-      { error: "Gagal menyimpan profil usaha" },
+      { 
+        error: "Gagal menyimpan profil usaha",
+        detail: errorMessage,
+        code: errorCode,
+        constraint: errorConstraint,
+        pgDetail: errorDetail
+      },
       { status: 500 }
     );
   }

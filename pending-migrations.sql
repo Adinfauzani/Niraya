@@ -189,7 +189,37 @@ CREATE POLICY "dining_tables_update_manager" ON "core"."DiningTables"
     WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
 
 -- ------------------------------------------------------------
--- 3. CORE SCHEMA: Seed 'free' role (idempotent)
+-- 3. SETTINGS SCHEMA: RLS Policies (INSERT missing for onboarding)
+-- ------------------------------------------------------------
+
+-- BusinessProfile: add INSERT policy for onboarding step 1
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'settings' AND tablename = 'BusinessProfile' AND policyname = 'business_profile_insert_admin') THEN
+    DROP POLICY "business_profile_insert_admin" ON "settings"."BusinessProfile";
+  END IF;
+END $$;
+
+ALTER TABLE "settings"."BusinessProfile" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "business_profile_insert_admin" ON "settings"."BusinessProfile"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
+
+-- BusinessSettings: add INSERT policy for onboarding step 1
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'settings' AND tablename = 'BusinessSettings' AND policyname = 'business_settings_insert_admin') THEN
+    DROP POLICY "business_settings_insert_admin" ON "settings"."BusinessSettings";
+  END IF;
+END $$;
+
+ALTER TABLE "settings"."BusinessSettings" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "business_settings_insert_admin" ON "settings"."BusinessSettings"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
+
+-- ------------------------------------------------------------
+-- 4. CORE SCHEMA: Seed 'free' role (idempotent)
 -- ------------------------------------------------------------
 INSERT INTO "core"."Roles" ("Code", "Name", "Description", "Rank", "IsSystem") VALUES
     ('free', 'Free', 'Free tier - limited features', 0, true),
