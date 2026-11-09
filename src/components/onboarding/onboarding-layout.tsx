@@ -21,23 +21,23 @@ export function OnboardingLayout({ children, currentStep, totalSteps }: Onboardi
         />
       </div>
 
-      <main className="relative flex min-h-screen flex-col items-center justify-center px-4 py-12">
+      <main className="relative flex min-h-screen flex-col items-center pt-4 pb-2 px-4 sm:pt-6 sm:pb-4">
         <div className="w-full max-w-3xl">
           {/* Header */}
-          <header className="mb-8 text-center">
-            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <svg className="h-7 w-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <header className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+              <svg className="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">Setup Usaha Pertama</h1>
-            <p className="mt-2 text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Setup Usaha Pertama</h1>
+            <p className="mt-1 sm:mt-2 text-sm sm:text-base text-muted-foreground">
               Ikuti langkah-langkah di bawah untuk menyiapkan usaha Anda
             </p>
           </header>
 
           {/* Step indicator */}
-          <nav className="mb-8" aria-label="Onboarding progress">
+          <nav className="mb-6" aria-label="Onboarding progress">
             <ol className="flex items-center justify-center gap-1" role="list">
               {Array.from({ length: totalSteps }, (_, i) => {
                 const step = i + 1

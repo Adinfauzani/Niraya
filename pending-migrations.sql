@@ -41,6 +41,25 @@ $$;
 -- 2. CORE SCHEMA: RLS Policies (Multi-tenant isolation)
 -- ------------------------------------------------------------
 
+-- Helper: drop policy if exists
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'Businesses' AND policyname = 'businesses_select_member') THEN
+    DROP POLICY "businesses_select_member" ON "core"."Businesses";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'Businesses' AND policyname = 'businesses_insert_owner') THEN
+    DROP POLICY "businesses_insert_owner" ON "core"."Businesses";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'Businesses' AND policyname = 'businesses_update_admin') THEN
+    DROP POLICY "businesses_update_admin" ON "core"."Businesses";
+  END IF;
+END $$;
+
 -- Businesses RLS
 ALTER TABLE "core"."Businesses" ENABLE ROW LEVEL SECURITY;
 
@@ -58,6 +77,24 @@ CREATE POLICY "businesses_update_admin" ON "core"."Businesses"
     WITH CHECK ("core"."has_business_role"("Id", 'owner') OR "core"."has_business_role"("Id", 'admin'));
 
 -- Stores RLS
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'Stores' AND policyname = 'stores_select_member') THEN
+    DROP POLICY "stores_select_member" ON "core"."Stores";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'Stores' AND policyname = 'stores_insert_admin') THEN
+    DROP POLICY "stores_insert_admin" ON "core"."Stores";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'Stores' AND policyname = 'stores_update_admin') THEN
+    DROP POLICY "stores_update_admin" ON "core"."Stores";
+  END IF;
+END $$;
+
 ALTER TABLE "core"."Stores" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "stores_select_member" ON "core"."Stores"
@@ -74,6 +111,30 @@ CREATE POLICY "stores_update_admin" ON "core"."Stores"
     WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- BusinessMembers RLS
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'BusinessMembers' AND policyname = 'business_members_select_own') THEN
+    DROP POLICY "business_members_select_own" ON "core"."BusinessMembers";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'BusinessMembers' AND policyname = 'business_members_select_admin') THEN
+    DROP POLICY "business_members_select_admin" ON "core"."BusinessMembers";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'BusinessMembers' AND policyname = 'business_members_insert_owner') THEN
+    DROP POLICY "business_members_insert_owner" ON "core"."BusinessMembers";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'BusinessMembers' AND policyname = 'business_members_update_admin') THEN
+    DROP POLICY "business_members_update_admin" ON "core"."BusinessMembers";
+  END IF;
+END $$;
+
 ALTER TABLE "core"."BusinessMembers" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "business_members_select_own" ON "core"."BusinessMembers"
@@ -94,6 +155,24 @@ CREATE POLICY "business_members_update_admin" ON "core"."BusinessMembers"
     WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- DiningTables RLS
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'DiningTables' AND policyname = 'dining_tables_select_member') THEN
+    DROP POLICY "dining_tables_select_member" ON "core"."DiningTables";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'DiningTables' AND policyname = 'dining_tables_insert_manager') THEN
+    DROP POLICY "dining_tables_insert_manager" ON "core"."DiningTables";
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'core' AND tablename = 'DiningTables' AND policyname = 'dining_tables_update_manager') THEN
+    DROP POLICY "dining_tables_update_manager" ON "core"."DiningTables";
+  END IF;
+END $$;
+
 ALTER TABLE "core"."DiningTables" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "dining_tables_select_member" ON "core"."DiningTables"
