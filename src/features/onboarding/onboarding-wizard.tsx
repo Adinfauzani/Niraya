@@ -55,8 +55,8 @@ const storeSchema = z.object({
 const operationalSchema = z.object({
   currency: z.string().default("IDR"),
   timezone: z.string().default("Asia/Jakarta"),
-  taxRate: z.number().min(0).max(1).default(0),
-  memberDiscountRate: z.number().min(0).max(1).default(0),
+  taxRate: z.number().min(0).max(100).default(0).transform((val) => val / 100),
+  memberDiscountRate: z.number().min(0).max(100).default(0).transform((val) => val / 100),
   lowStockThreshold: z.number().min(0).default(10),
   reservationExpiryMinutes: z.number().min(1).default(30),
   autoCancelUnpaidOrders: z.boolean().default(true),
@@ -109,7 +109,7 @@ const CATEGORIES = [
   { code: "other", name: "Lainnya", description: "Bidang usaha lain di luar kategori di atas" },
 ]
 
-export function OnboardingWizard() {
+export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [businessId, setBusinessId] = useState<string>("")
@@ -230,7 +230,7 @@ export function OnboardingWizard() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || "Gagal menyelesaikan")
         toast.success("Onboarding selesai! Selamat datang sebagai Owner.")
-        router.push("/dashboard")
+        onComplete?.()
         router.refresh()
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Gagal menyelesaikan onboarding")
@@ -441,15 +441,15 @@ export function OnboardingWizard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="taxRate">Pajak Default (%)</Label>
-                    <Input id="taxRate" type="number" step="0.01" min="0" max="100" {...operationalForm.register("taxRate", { valueAsNumber: true })} placeholder="0" />
-                    <p className="text-sm text-muted-foreground">Contoh: 11 untuk PPN 11%</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="memberDiscountRate">Diskon Member (%)</Label>
-                    <Input id="memberDiscountRate" type="number" step="0.01" min="0" max="100" {...operationalForm.register("memberDiscountRate", { valueAsNumber: true })} placeholder="0" />
-                  </div>
+<div className="space-y-2">
+  <Label htmlFor="taxRate">Pajak Default (%)</Label>
+  <Input id="taxRate" type="number" step="0.01" min="0" max="100" {...operationalForm.register("taxRate", { valueAsNumber: true })} placeholder="11" />
+  <p className="text-sm text-muted-foreground">Contoh: 11 untuk PPN 11%</p>
+</div>
+<div className="space-y-2">
+  <Label htmlFor="memberDiscountRate">Diskon Member (%)</Label>
+  <Input id="memberDiscountRate" type="number" step="0.01" min="0" max="100" {...operationalForm.register("memberDiscountRate", { valueAsNumber: true })} placeholder="0" />
+</div>
                 </div>
               </CardContent>
             </Card>
