@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, Workflow, Boxes, QrCode, Users, Shield, Settings, CreditCard, Smartphone, Menu, HelpCircle, Sparkles, Zap, BarChart, LayoutDashboard, Store, Truck, Package, Users as UsersIcon, Mail, Lock, Globe, Database, Wifi, Cpu, Heart, Star, Award, Target, TrendingUp, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft, Moon, Sun, Monitor, Smartphone as SmartphoneIcon, Tablet, Zap as ZapIcon, ArrowUpRight, ExternalLink, MessageSquare, Mail as MailIcon, MapPin, Phone, Clock, Coffee, Utensils, Store as StoreIcon, Receipt, CreditCard as CreditCardIcon, QrCode as QrCodeIcon, Users as UsersIcon2, Shield as ShieldIcon, Settings as SettingsIcon, Boxes as BoxesIcon, Workflow as WorkflowIcon, HelpCircle as HelpCircleIcon, Cookie, GitBranch, Link as LinkIcon } from "lucide-react"
+import { ArrowRight, Workflow, Boxes, QrCode, Users, Shield, Settings, CreditCard, Smartphone, HelpCircle, Sparkles, Zap, BarChart, LayoutDashboard, Store, Truck, Package, Users as UsersIcon, Mail, Lock, Globe, Database, Wifi, Cpu, Heart, Star, Award, Target, TrendingUp, ShieldCheck, CheckCircle, ChevronRight, ChevronLeft, Moon, Sun, Monitor, Smartphone as SmartphoneIcon, Tablet, Zap as ZapIcon, ArrowUpRight, ExternalLink, MessageSquare, Mail as MailIcon, MapPin, Phone, Clock, Coffee, Utensils, Store as StoreIcon, Receipt, CreditCard as CreditCardIcon, QrCode as QrCodeIcon, Users as UsersIcon2, Shield as ShieldIcon, Settings as SettingsIcon, Boxes as BoxesIcon, Workflow as WorkflowIcon, HelpCircle as HelpCircleIcon, Cookie, GitBranch, Link as LinkIcon, Settings2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -11,12 +11,46 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
+import { BottomNav } from "@/components/ui/bottom-nav"
 
 const NAV = [
   { href: "/", label: "Beranda" },
-  { href: "/menu", label: "Menu" },
   { href: "/features", label: "Fitur" },
   { href: "/plans", label: "Plans" },
+];
+
+const HOW_IT_WORKS = [
+  {
+    step: 1,
+    title: "Daftar Akun",
+    desc: "Buat akun gratis dan verifikasi email. Tidak perlu kartu kredit.",
+    icon: UsersIcon2,
+  },
+  {
+    step: 2,
+    title: "Setup Katalog",
+    desc: "Tambah kategori, produk, varian, harga, dan stok awal via dashboard.",
+    icon: Package,
+  },
+  {
+    step: 3,
+    title: "Buka Kasir",
+    desc: "Transaksi cepat dengan validasi stok & harga server-side, multi-bayar, struk digital.",
+    icon: CreditCardIcon,
+  },
+  {
+    step: 4,
+    title: "Terima Pesanan QR",
+    desc: "Pelanggan scan QR meja, pesan & bayar dari HP. Sinkron otomatis ke kasir & dapur.",
+    icon: QrCodeIcon,
+  },
+  {
+    step: 5,
+    title: "Pantau & Skala",
+    desc: "Laporan real-time, produk terlaris, performa tim, arus kas. Ekspor CSV/PDF.",
+    icon: BarChart,
+  },
 ];
 
 const FEATURES = [
@@ -80,7 +114,6 @@ const FOOTER_LINKS = {
   Produk: [
     { label: "Fitur", href: "/features" },
     { label: "Harga", href: "/plans" },
-    { label: "Menu Demo", href: "/menu" },
     { label: "Changelog", href: "/changelog" },
   ],
   Perusahaan: [
@@ -96,10 +129,9 @@ const FOOTER_LINKS = {
     { label: "Status", href: "/status" },
   ],
   Legal: [
-    { label: "Privasi", href: "/privacy" },
-    { label: "Syarat", href: "/terms" },
-    { label: "Cookie", href: "/cookies" },
-    { label: "Keamanan", href: "/security" },
+    { label: "Kebijakan Privasi", href: "/privacy" },
+    { label: "Syarat & Ketentuan", href: "/terms" },
+    { label: "Cookie Policy", href: "/cookies" },
   ],
 };
 
@@ -112,22 +144,50 @@ const SOCIALS = [
 
 export function LandingPage() {
   const [cookieAccepted, setCookieAccepted] = useState(false);
+  const [showCookieSettings, setShowCookieSettings] = useState(false);
+  const [cookiePrefs, setCookiePrefs] = useState({
+    essential: true,
+    analytics: false,
+    preferences: false,
+    marketing: false,
+  });
 
   useEffect(() => {
     const accepted = localStorage.getItem("cookie-accepted");
-    if (accepted) setCookieAccepted(true);
+    const prefs = localStorage.getItem("cookie-prefs");
+    if (accepted) {
+      setCookieAccepted(true);
+      if (prefs) {
+        try {
+          setCookiePrefs(JSON.parse(prefs));
+        } catch {
+          // ignore parse errors
+        }
+      }
+    }
   }, []);
 
   const acceptCookies = () => {
     localStorage.setItem("cookie-accepted", "true");
+    localStorage.setItem("cookie-prefs", JSON.stringify(cookiePrefs));
     setCookieAccepted(true);
+    setShowCookieSettings(false);
     toast.success("Preferensi cookie disimpan");
   };
 
   const declineCookies = () => {
-    localStorage.setItem("cookie-accepted", "false");
+    localStorage.setItem("cookie-accepted", "true");
+    const essentialOnly = { essential: true, analytics: false, preferences: false, marketing: false };
+    localStorage.setItem("cookie-prefs", JSON.stringify(essentialOnly));
+    setCookiePrefs(essentialOnly);
     setCookieAccepted(true);
+    setShowCookieSettings(false);
     toast.info("Hanya cookie esensial yang digunakan");
+  };
+
+  const togglePref = (key: keyof typeof cookiePrefs) => {
+    if (key === "essential") return; // Essential cannot be disabled
+    setCookiePrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -136,12 +196,10 @@ export function LandingPage() {
         <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
             <Link href="/" className="group flex min-w-0 items-center gap-2.5 font-semibold tracking-tight">
-              <span className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-500/20 bg-[linear-gradient(135deg,rgba(37,99,235,0.16),rgba(16,185,129,0.10))] shadow-sm ring-1 ring-blue-500/10">
-                <Image src="/Logo.png" alt="Niraya" width={20} height={20} className="rounded-sm" />
-              </span>
+              <Image src="/Logo.png" alt="Niraya" width={28} height={28} className="size-7" />
               <span className="flex items-baseline gap-1.5">
                 <span className="text-[15px] font-semibold tracking-[-0.03em] text-foreground">niraya</span>
-                <span className="rounded-md border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">pos</span>
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-primary">pos</span>
               </span>
             </Link>
             <nav className="hidden items-center gap-0.5 xl:flex" aria-label="Navigasi utama">
@@ -166,7 +224,7 @@ export function LandingPage() {
               </div>
             </div>
           </div>
-        </header>
+</header>
 
         <main>
           <section id="beranda" className="relative overflow-hidden border-b">
@@ -215,6 +273,45 @@ export function LandingPage() {
               <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
                 Niraya POS adalah perangkat lunak kasir untuk mengelola katalog produk, penjualan, inventori, dan alur operasional harian dalam satu aplikasi. Dibangun dengan Next.js 16, React 19, TypeScript, Tailwind CSS v4, Drizzle ORM, Supabase Postgres & Auth.
               </p>
+            </div>
+          </section>
+
+          <section id="cara-kerja" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+            <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="max-w-2xl space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Cara kerja</p>
+                <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Mulai dalam 5 Langkah</h2>
+                <p className="text-sm text-muted-foreground">
+                  Dari pendaftaran hingga operasional penuh: tidak perlu setup server, tinggal daftar dan pakai.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+              {HOW_IT_WORKS.map((h) => (
+                <Card
+                  key={h.step}
+                  className="group relative h-full overflow-hidden rounded-[24px] border-border/70 bg-card/80 shadow-none transition-[transform,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none hover:-translate-y-0.5 hover:border-blue-600/20 hover:shadow-[0_16px_40px_-28px_rgba(37,99,235,0.45)]"
+                >
+                  <CardContent className="relative flex h-full flex-col gap-4 p-5 sm:p-6">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="rounded-full border border-dashed px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Langkah {h.step}
+                      </span>
+                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                        Gratis
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border bg-muted/25 text-muted-foreground">
+                        <h.icon className="size-4" />
+                      </span>
+                      <h3 className="min-w-0 font-medium leading-tight">{h.title}</h3>
+                    </div>
+                    <p className="text-sm leading-6 text-muted-foreground">{h.desc}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </section>
 
@@ -274,30 +371,6 @@ export function LandingPage() {
             </div>
           </section>
 
-          <section id="teknologi" className="border-t mx-auto max-w-6xl px-4 py-14 sm:px-6">
-            <div className="mb-8 max-w-2xl">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Teknologi</p>
-              <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">Dibangun dengan Stack Modern</h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              {[
-                { name: "Next.js 16", icon: ZapIcon },
-                { name: "React 19", icon: Cpu },
-                { name: "TypeScript", icon: Database },
-                { name: "Tailwind v4", icon: Monitor },
-                { name: "Drizzle ORM", icon: Wifi },
-                { name: "Supabase", icon: ShieldCheck },
-              ].map((t) => (
-                <div key={t.name} className="flex flex-col items-center gap-2 rounded-2xl border border-dashed bg-background/70 p-4 text-center">
-                  <span className="flex size-10 items-center justify-center rounded-xl bg-muted/25 text-muted-foreground">
-                    <t.icon className="size-5" />
-                  </span>
-                  <span className="text-sm font-medium">{t.name}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
           <section id="cta" className="border-t bg-gradient-to-b from-blue-500/5 via-transparent to-transparent mx-auto max-w-6xl px-4 py-14 sm:px-6">
             <div className="mx-auto max-w-2xl text-center space-y-4">
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -320,129 +393,207 @@ export function LandingPage() {
 
         <footer className="border-t bg-muted/20">
           <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="lg:col-span-2 space-y-4">
+            <div className="space-y-8">
+              <div className="flex flex-wrap items-baseline justify-between gap-4">
                 <Link href="/" className="group flex min-w-0 items-center gap-2.5 font-semibold tracking-tight">
-                  <span className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-500/20 bg-[linear-gradient(135deg,rgba(37,99,235,0.16),rgba(16,185,129,0.10))] shadow-sm ring-1 ring-blue-500/10">
-                    <Image src="/Logo.png" alt="Niraya" width={20} height={20} className="rounded-sm" />
-                  </span>
+                  <Image src="/Logo.png" alt="Niraya" width={28} height={28} className="size-7" />
                   <span className="flex items-baseline gap-1.5">
                     <span className="text-[15px] font-semibold tracking-[-0.03em] text-foreground">niraya</span>
-                    <span className="rounded-md border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">pos</span>
+                    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-primary">pos</span>
                   </span>
                 </Link>
-                <p className="max-w-xs text-sm text-muted-foreground">
-                  Sistem kasir modern untuk warung, kafe, dan toko. Dibangun dengan Next.js, Supabase, dan Drizzle ORM.
-                </p>
-                <div className="flex gap-4">
-                  {SOCIALS.map((s) => (
-                    <a
-                      key={s.label}
-                      href={s.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label={s.label}
-                    >
-                      <s.icon className="size-5" />
-                    </a>
-                  ))}
-                </div>
               </div>
 
-              <nav>
-                <h3 className="font-medium">Produk</h3>
-                <ul className="mt-4 space-y-2">
-                  {FOOTER_LINKS.Produk.map((l) => (
-                    <li key={l.label}>
-                      <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                        {l.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+              <div className="flex flex-wrap items-start justify-between gap-6">
+                <div className="space-y-4 flex-1 min-w-[200px]">
+                  <p className="max-w-xs text-sm text-muted-foreground">
+                    Sistem kasir modern untuk warung, kafe, dan toko. Dibangun dengan Next.js, Supabase, dan Drizzle ORM.
+                  </p>
+                  <div className="flex gap-4">
+                    {SOCIALS.map((s) => (
+                      <a
+                        key={s.label}
+                        href={s.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={s.label}
+                      >
+                        <s.icon className="size-5" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
 
-              <nav>
-                <h3 className="font-medium">Perusahaan</h3>
-                <ul className="mt-4 space-y-2">
-                  {FOOTER_LINKS.Perusahaan.map((l) => (
-                    <li key={l.label}>
-                      <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                        {l.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+                <nav className="flex-1 min-w-[140px]">
+                  <h3 className="font-medium">Produk</h3>
+                  <ul className="mt-4 space-y-2">
+                    {FOOTER_LINKS.Produk.map((l) => (
+                      <li key={l.label}>
+                        <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                          {l.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
 
-              <nav>
-                <h3 className="font-medium">Sumber</h3>
-                <ul className="mt-4 space-y-2">
-                  {FOOTER_LINKS.Sumber.map((l) => (
-                    <li key={l.label}>
-                      <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                        {l.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+                <nav className="flex-1 min-w-[140px]">
+                  <h3 className="font-medium">Perusahaan</h3>
+                  <ul className="mt-4 space-y-2">
+                    {FOOTER_LINKS.Perusahaan.map((l) => (
+                      <li key={l.label}>
+                        <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                          {l.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
 
-              <nav>
-                <h3 className="font-medium">Legal</h3>
-                <ul className="mt-4 space-y-2">
+                <nav className="flex-1 min-w-[140px]">
+                  <h3 className="font-medium">Sumber</h3>
+                  <ul className="mt-4 space-y-2">
+                    {FOOTER_LINKS.Sumber.map((l) => (
+                      <li key={l.label}>
+                        <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                          {l.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              </div>
+
+              <div className="pt-8 border-t flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground">
+                <p>© {new Date().getFullYear()} Niraya. Hak cipta dilindungi.</p>
+                <nav aria-label="Legal" className="flex flex-wrap items-center gap-4">
                   {FOOTER_LINKS.Legal.map((l) => (
-                    <li key={l.label}>
-                      <Link href={l.href} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                        {l.label}
-                      </Link>
-                    </li>
+                    <Link
+                      key={l.label}
+                      href={l.href}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {l.label}
+                    </Link>
                   ))}
-                </ul>
-              </nav>
-            </div>
-
-            <div className="mt-10 flex flex-col items-center gap-2 border-t pt-6 sm:flex-row sm:justify-between">
-              <p className="text-xs text-muted-foreground">
-                &copy; {new Date().getFullYear()} Niraya POS. Hak cipta dilindungi.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Dibangun dengan <span className="text-foreground">Next.js</span> + <span className="text-foreground">Supabase</span>
-              </p>
+                </nav>
+              </div>
             </div>
           </div>
         </footer>
       </div>
 
-      {/* Cookie Consent Banner */}
+      {/* Cookie Consent Pill Bar */}
       {!cookieAccepted && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-md animate-in slide-in-from-bottom-4" role="dialog" aria-label="Cookie consent">
-          <Card className="w-full shadow-lg border-border/50">
-            <CardContent className="p-4 sm:p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <Cookie className="size-6 text-muted-foreground shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium">Kami menggunakan cookie</p>
-                  <p className="text-xs text-muted-foreground">
-                    Cookie esensial untuk fungsi situs, analitik anonim, dan preferensi tema. Tidak ada pelacakan pribadi.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <Button variant="ghost" size="sm" onClick={declineCookies} className="w-full sm:w-auto">
-                  Tolak
-                </Button>
-                <Button size="sm" onClick={acceptCookies} className="w-full sm:w-auto">
-                  Terima Semua
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <>
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-4xl animate-in slide-in-from-bottom-2" role="dialog" aria-label="Cookie consent">
+            <div className="w-full bg-[#202022] border border-[#2e2e32] rounded-full p-2.5 sm:p-3 flex items-center justify-between shadow-2xl backdrop-blur-md gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowCookieSettings(true)}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full text-[#8e8e93] hover:text-white hover:bg-[#2c2c30] transition-colors"
+                aria-label="Cookie Preferences"
+              >
+                <Settings2 className="size-5" />
+              </Button>
+
+              {/* Reject Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={declineCookies}
+                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium text-[#c7c7cc] bg-[#2a2a2e]/60 hover:bg-[#323238] border border-transparent hover:border-[#3e3e44] transition-all"
+              >
+                Reject
+              </Button>
+
+              {/* Accept Button */}
+              <Button
+                size="sm"
+                onClick={acceptCookies}
+                className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-white bg-[#f95721] hover:bg-[#ff6938] shadow-lg shadow-[#f95721]/20 active:scale-95 transition-all"
+              >
+                Accept
+              </Button>
+            </div>
+          </div>
+
+          {showCookieSettings && (
+            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-4xl animate-in slide-in-from-bottom-2">
+              {/* Settings Panel - expands below */}
+              <Card className="w-full shadow-2xl border border-[#2e2e32] bg-[#202022] rounded-2xl overflow-hidden">
+                <CardContent className="p-4 sm:p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-white">Cookie Preferences</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowCookieSettings(false)}
+                      className="text-[#8e8e93] hover:text-white"
+                      aria-label="Close"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between px-2 py-2 rounded-xl bg-[#2a2a2e]/60">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-white">Essential</p>
+                        <p className="text-xs text-[#8e8e93]">Required for basic site functionality (authentication, security, preferences)</p>
+                      </div>
+                      <Switch checked={true} disabled className="data-[size=default]:h-[16px] data-[size=default]:w-[28px]" />
+                    </div>
+
+                    <label className="flex items-center justify-between px-2 py-2 rounded-xl bg-[#2a2a2e]/60 cursor-pointer">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-white">Analytics</p>
+                        <p className="text-xs text-[#8e8e93]">Collect anonymous data to understand site usage</p>
+                      </div>
+                      <Switch checked={cookiePrefs.analytics} onCheckedChange={() => togglePref("analytics")} className="data-[size=default]:h-[16px] data-[size=default]:w-[28px]" aria-label="Analytics" />
+                    </label>
+
+                    <label className="flex items-center justify-between px-2 py-2 rounded-xl bg-[#2a2a2e]/60 cursor-pointer">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-white">Preferences</p>
+                        <p className="text-xs text-[#8e8e93]">Remember theme, language, and user settings</p>
+                      </div>
+                      <Switch checked={cookiePrefs.preferences} onCheckedChange={() => togglePref("preferences")} className="data-[size=default]:h-[16px] data-[size=default]:w-[28px]" aria-label="Preferences" />
+                    </label>
+
+                    <label className="flex items-center justify-between px-2 py-2 rounded-xl bg-[#2a2a2e]/60 cursor-pointer">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-white">Marketing</p>
+                        <p className="text-xs text-[#8e8e93]">Show relevant content and ads based on interests</p>
+                      </div>
+                      <Switch checked={cookiePrefs.marketing} onCheckedChange={() => togglePref("marketing")} className="data-[size=default]:h-[16px] data-[size=default]:w-[28px]" aria-label="Marketing" />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2 border-t border-[#2e2e32] pt-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowCookieSettings(false)}
+                      className="flex-1"
+                    >
+                      Back
+                    </Button>
+                    <Button size="sm" onClick={acceptCookies} className="flex-1 bg-[#f95721] hover:bg-[#ff6938]">
+                      Save Preferences
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </>
       )}
 
       <div id="sonner-container" />
+      <BottomNav />
     </>
   );
 }

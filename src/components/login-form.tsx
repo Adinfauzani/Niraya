@@ -64,18 +64,11 @@ export function LoginForm({
       })
 
       if (error) {
-        // Handle email not confirmed
-        if (error.message.includes("Email not confirmed") || error.message.includes("email not confirmed")) {
-          sessionStorage.setItem("pending_email", values.email)
-          router.push("/verify")
-          return
-        }
         setFormError(error.message || "Email atau kata sandi salah.")
         return
       }
 
-      const profile = await fetch("/api/me").then((response) => response.json())
-      router.push(profile.user?.role === "user" ? "/profile" : "/dashboard")
+      router.push("/dashboard")
       router.refresh()
     } catch (error) {
       setFormError(
