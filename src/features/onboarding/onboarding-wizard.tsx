@@ -109,7 +109,7 @@ const CATEGORIES = [
   { code: "other", name: "Lainnya", description: "Bidang usaha lain di luar kategori di atas" },
 ]
 
-export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
+export function OnboardingWizard() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [businessId, setBusinessId] = useState<string>("")
@@ -230,7 +230,7 @@ export function OnboardingWizard({ onComplete }: { onComplete?: () => void }) {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || "Gagal menyelesaikan")
         toast.success("Onboarding selesai! Selamat datang sebagai Owner.")
-        onComplete?.()
+        router.push("/dashboard")
         router.refresh()
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Gagal menyelesaikan onboarding")
