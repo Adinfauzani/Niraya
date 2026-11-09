@@ -15,6 +15,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const role = realUser?.role
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [checkingOnboarding, setCheckingOnboarding] = useState(true)
+  const [onboardingDone, setOnboardingDone] = useState(false)
 
   // Check onboarding status first
   useEffect(() => {
@@ -29,9 +30,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           const data = await res.json()
           if (data.needsOnboarding) {
             setShowOnboarding(true)
-          } else if (role === "user" && pathname !== "/profile") {
-            // Onboarding done but role is still "user" -> go to profile
-            router.replace("/profile")
+            setOnboardingDone(false)
+          } else {
+            setOnboardingDone(true)
+            setShowOnboarding(false)
           }
         }
       } catch {
@@ -41,15 +43,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     }
     checkOnboarding()
-  }, [role, pathname, router])
+  }, [role, pathname])
 
-  // Also redirect if role changes to "user" after onboarding check
+  // Only redirect to /profile AFTER onboarding check is done
   useEffect(() => {
-    if (!role || showOnboarding || pathname === "/profile" || pathname.startsWith("/onboarding")) return
-    if (role === "user") {
+    if (!role || checkingOnboarding || showOnboarding || pathname === "/profile" || pathname.startsWith("/onboarding")) return
+    if (onboardingDone && role === "user") {
       router.replace("/profile")
     }
-  }, [role, pathname, router, showOnboarding])
+  }, [role, pathname, router, checkingOnboarding, showOnboarding, onboardingDone])
 
   if (checkingOnboarding) {
     return <DashboardLayout>{children}</DashboardLayout>
@@ -57,6 +59,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false)
+    setOnboardingDone(true)
     router.refresh()
   }
 
