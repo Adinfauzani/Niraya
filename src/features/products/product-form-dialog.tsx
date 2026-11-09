@@ -1,11 +1,11 @@
 "use client";
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
-import { Button } from '@/components/ui/button'
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -22,35 +22,38 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import type { Category, Product } from '@/types/business'
+} from "@/components/ui/select";
+import type { Category, Product } from "@/types/business";
 
 const productSchema = z.object({
-  name: z.string().trim().min(1, 'Nama produk wajib diisi'),
-  sku: z.string().trim().min(1, 'SKU wajib diisi'),
+  name: z.string().trim().min(1, "Nama produk wajib diisi"),
+  sku: z.string().trim().min(1, "SKU wajib diisi"),
   barcode: z.string().trim().optional(),
-  categoryId: z.string().min(1, 'Pilih kategori'),
-  price: z.number().min(1, 'Harga jual harus lebih dari 0'),
-  cost: z.number().min(0, 'Harga modal tidak boleh negatif'),
-  stock: z.number().int('Stok harus bilangan bulat').min(0, 'Stok tidak boleh negatif'),
+  categoryId: z.string().min(1, "Pilih kategori"),
+  price: z.number().min(1, "Harga jual harus lebih dari 0"),
+  cost: z.number().min(0, "Harga modal tidak boleh negatif"),
+  stock: z
+    .number()
+    .int("Stok harus bilangan bulat")
+    .min(0, "Stok tidak boleh negatif"),
   minStock: z
     .number()
-    .int('Stok minimum harus bilangan bulat')
-    .min(0, 'Stok minimum tidak boleh negatif'),
-  unit: z.string().trim().min(1, 'Satuan wajib diisi'),
+    .int("Stok minimum harus bilangan bulat")
+    .min(0, "Stok minimum tidak boleh negatif"),
+  unit: z.string().trim().min(1, "Satuan wajib diisi"),
   imageUrl: z.string().trim().optional(),
-  status: z.enum(['active', 'archived']),
-})
+  status: z.enum(["active", "archived"]),
+});
 
-export type ProductFormValues = z.infer<typeof productSchema>
+export type ProductFormValues = z.infer<typeof productSchema>;
 
 export function ProductFormDialog({
   open,
@@ -59,36 +62,36 @@ export function ProductFormDialog({
   categories,
   onSubmit,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  product?: Product | null
-  categories: readonly Category[]
-  onSubmit: (values: ProductFormValues) => boolean
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product?: Product | null;
+  categories: readonly Category[];
+  onSubmit: (values: ProductFormValues) => boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{product ? 'Edit produk' : 'Tambah produk'}</DialogTitle>
+          <DialogTitle>{product ? "Edit produk" : "Tambah produk"}</DialogTitle>
           <DialogDescription>
             {product
-              ? 'Perbarui informasi produk. Perubahan langsung dipakai di POS.'
-              : 'Produk baru langsung tersedia di katalog POS setelah disimpan.'}
+              ? "Perbarui informasi produk. Perubahan langsung dipakai di POS."
+              : "Produk baru langsung tersedia di katalog POS setelah disimpan."}
           </DialogDescription>
         </DialogHeader>
 
         <ProductFormBody
-          key={product?.id ?? 'new'}
+          key={product?.id ?? "new"}
           product={product}
           categories={categories}
           onCancel={() => onOpenChange(false)}
           onSubmit={(values) => {
-            if (onSubmit(values)) onOpenChange(false)
+            if (onSubmit(values)) onOpenChange(false);
           }}
         />
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 function ProductFormBody({
@@ -97,35 +100,39 @@ function ProductFormBody({
   onCancel,
   onSubmit,
 }: {
-  product?: Product | null
-  categories: readonly Category[]
-  onCancel: () => void
-  onSubmit: (values: ProductFormValues) => void
+  product?: Product | null;
+  categories: readonly Category[];
+  onCancel: () => void;
+  onSubmit: (values: ProductFormValues) => void;
 }) {
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
-      name: product?.name ?? '',
-      sku: product?.sku ?? '',
-      barcode: product?.barcode ?? '',
-      categoryId: product?.categoryId ?? categories[0]?.id ?? '',
+      name: product?.name ?? "",
+      sku: product?.sku ?? "",
+      barcode: product?.barcode ?? "",
+      categoryId: product?.categoryId ?? categories[0]?.id ?? "",
       price: product?.price ?? 0,
       cost: product?.cost ?? 0,
       stock: product?.stock ?? 0,
       minStock: product?.minStock ?? 5,
-      unit: product?.unit ?? 'pcs',
-      imageUrl: product?.imageUrl ?? '',
-      status: product?.status ?? 'active',
+      unit: product?.unit ?? "pcs",
+      imageUrl: product?.imageUrl ?? "",
+      status: product?.status ?? "active",
     },
-  })
+  });
 
   // Keep the category valid if the list changes while the dialog is open.
   useEffect(() => {
-    if (categories.length === 0) return
-    if (!categories.some((category) => category.id === form.getValues('categoryId'))) {
-      form.setValue('categoryId', categories[0]!.id)
+    if (categories.length === 0) return;
+    if (
+      !categories.some(
+        (category) => category.id === form.getValues("categoryId"),
+      )
+    ) {
+      form.setValue("categoryId", categories[0]!.id);
     }
-  }, [categories, form])
+  }, [categories, form]);
 
   return (
     <Form {...form}>
@@ -241,7 +248,9 @@ function ProductFormBody({
                     value={field.value}
                     onChange={(event) =>
                       field.onChange(
-                        event.target.value === '' ? 0 : Number(event.target.value),
+                        event.target.value === ""
+                          ? 0
+                          : Number(event.target.value),
                       )
                     }
                   />
@@ -266,7 +275,9 @@ function ProductFormBody({
                     value={field.value}
                     onChange={(event) =>
                       field.onChange(
-                        event.target.value === '' ? 0 : Number(event.target.value),
+                        event.target.value === ""
+                          ? 0
+                          : Number(event.target.value),
                       )
                     }
                   />
@@ -291,7 +302,7 @@ function ProductFormBody({
                     value={field.value}
                     onChange={(event) =>
                       field.onChange(
-                        event.target.value === ''
+                        event.target.value === ""
                           ? 0
                           : Math.floor(Number(event.target.value)),
                       )
@@ -318,7 +329,7 @@ function ProductFormBody({
                     value={field.value}
                     onChange={(event) =>
                       field.onChange(
-                        event.target.value === ''
+                        event.target.value === ""
                           ? 0
                           : Math.floor(Number(event.target.value)),
                       )
@@ -370,10 +381,10 @@ function ProductFormBody({
             Batal
           </Button>
           <Button type="submit">
-            {product ? 'Simpan perubahan' : 'Tambah produk'}
+            {product ? "Simpan perubahan" : "Tambah produk"}
           </Button>
         </DialogFooter>
       </form>
     </Form>
-  )
+  );
 }

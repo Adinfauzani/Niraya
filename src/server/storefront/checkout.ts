@@ -6,7 +6,7 @@ import {
   DEFAULT_STORE_ID,
   checkoutIdempotency,
   inventory,
-  inventoryReservations,
+  reservations,
   orderItems,
   orderStatusHistory,
   orders,
@@ -107,7 +107,7 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
       const orderItemId = crypto.randomUUID();
       await tx.insert(orderItems).values({ id: orderItemId, orderId, productId: it.productId, productVariantId: it.variantId, productName: it.productName, sku: it.sku, variantName: it.variantName, quantity: it.quantity, unitPrice: it.unitPrice.toFixed(2), discountTotal:"0.00", taxTotal:"0.00", subtotal: it.lineTotal.toFixed(2), notes: it.notes, createdAt: now } as any);
       if (it.product.isStockTracked ?? true) {
-        await tx.insert(inventoryReservations).values({ id: crypto.randomUUID(), businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, orderId, orderItemId, productId: it.productId, quantity: it.quantity, status: "RESERVED", expiresAt, createdAt: now, updatedAt: now } as any);
+        await tx.insert(reservations).values({ id: crypto.randomUUID(), businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, orderId, orderItemId, productId: it.productId, quantity: it.quantity, status: "RESERVED", expiresAt, createdAt: now, updatedAt: now } as any);
         const inv = it.inv; const nextReserved = (inv?.reservedQuantity ?? 0) + it.quantity;
         if (inv) await tx.update(inventory).set({ reservedQuantity: nextReserved, updatedAt: now }).where(eq(inventory.id, inv.id));
         else await tx.insert(inventory).values({ businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, productId: it.productId, stockQuantity: it.product.stockQuantity ?? 0, reservedQuantity: nextReserved, minimumStock: it.product.minimumStock ?? 0, updatedAt: now } as any);

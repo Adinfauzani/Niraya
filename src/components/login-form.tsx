@@ -5,11 +5,12 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { EyeIcon, EyeOffIcon, Loader2Icon, LogInIcon } from "lucide-react"
+import { EyeIcon, EyeOffIcon, Loader2Icon, LogInIcon, AlertCircleIcon } from "lucide-react"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import {
   Field,
   FieldError,
@@ -18,7 +19,8 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { authClient } from "@/lib/auth-client"
+import { supabaseClient } from "@/lib/auth-client"
+import { GoogleIcon, AppleIcon } from "@/components/ui/social-icons"
 import { cn } from "@/lib/utils"
 
 const loginSchema = z.object({
@@ -56,10 +58,19 @@ export function LoginForm({
     setFormError("")
 
     try {
-      const result = await authClient.signIn.email(values)
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      })
 
-      if (result?.error) {
-        setFormError(result.error.message || "Email atau kata sandi salah.")
+      if (error) {
+        // Handle email not confirmed
+        if (error.message.includes("Email not confirmed") || error.message.includes("email not confirmed")) {
+          sessionStorage.setItem("pending_email", values.email)
+          router.push("/verify")
+          return
+        }
+        setFormError(error.message || "Email atau kata sandi salah.")
         return
       }
 
@@ -73,6 +84,33 @@ export function LoginForm({
           : "Gagal masuk. Silakan coba lagi."
       )
     }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setFormError("")
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) {
+        setFormError(error.message || "Gagal masuk dengan Google.")
+      }
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Gagal masuk dengan Google. Silakan coba lagi."
+      )
+    }
+  }
+
+  const handleAppleSignIn = () => {
+    toast.info("Coming Soon", {
+      description: "Login dengan Apple akan segera hadir.",
+    })
   }
 
   return (
@@ -93,7 +131,10 @@ export function LoginForm({
 
       {formError && (
         <Alert variant="destructive">
-          <AlertDescription>{formError}</AlertDescription>
+          <AlertDescription className="flex items-center gap-2">
+            <AlertCircleIcon className="size-4 shrink-0" />
+            {formError}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -152,17 +193,49 @@ export function LoginForm({
         </Button>
       </FieldGroup>
 
+      <div className="grid grid-cols-2 gap-4">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleGoogleSignIn}
+          disabled={isSubmitting}
+        >
+          <GoogleIcon className="size-4" />
+          Google
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleAppleSignIn}
+          disabled={isSubmitting}
+        >
+          <AppleIcon className="size-4" />
+          Apple
+        </Button>
+      </div>
+
       <FieldSeparator>atau</FieldSeparator>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Belum punya akun?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
-        >
-          Daftar
-        </Link>
-      </p>
-    </form>
-  )
-}
+<div className="flex flex-col gap-2 text-center text-sm">
+          <Link
+            href="/forgot-password"
+            className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+          >
+            Lupa kata sandi?
+          </Link>
+          <p className="text-muted-foreground">
+            Belum punya akun?{" "}
+            <Link
+              href="/signup"
+              className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Daftar
+            </Link>
+          </p>
+        </div>
+      </form>
+    )
+  }

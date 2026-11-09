@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { createSeedData } from "../../lib/business-seed";
-import { db, pool } from "./index";
+import { db, sql } from "./index";
 import {
   businesses,
   businessSettings,
@@ -430,5 +430,5 @@ seed()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await pool.end();
+    await sql.end();
   });

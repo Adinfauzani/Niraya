@@ -6,8 +6,6 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-
 import { DEFAULT_BUSINESS_ID, auditSchema } from "./schema";
 import { businesses } from "./core";
 

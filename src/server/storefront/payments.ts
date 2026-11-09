@@ -5,7 +5,7 @@ import {
   DEFAULT_BUSINESS_ID,
   DEFAULT_STORE_ID,
   inventory,
-  inventoryReservations,
+  reservations,
   orders,
   orderItems,
   orderStatusHistory,
@@ -72,7 +72,7 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
         await tx.insert(transactionItems).values({ id: crypto.randomUUID(), transactionId: txId, productId: it.productId, productName: it.productName, sku: it.sku, quantity: it.quantity, unitPrice: Number(it.unitPrice).toFixed(2), discountAmount: Number(it.discountTotal||0).toFixed(2), taxAmount: Number(it.taxTotal||0).toFixed(2), subtotal: Number(it.subtotal).toFixed(2), createdAt: now } as any);
       }
     }
-    const resRows = await tx.select().from(inventoryReservations).where(and(eq(inventoryReservations.orderId, order.id), eq(inventoryReservations.status, "RESERVED")));
+    const resRows = await tx.select().from(reservations).where(and(eq(reservations.orderId, order.id), eq(reservations.status, "RESERVED")));
     for (const r of resRows) {
       const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, r.productId), eq(inventory.storeId, DEFAULT_STORE_ID))).limit(1).for("update");
       if (inv) {
@@ -81,7 +81,7 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
         await tx.update(inventory).set({ reservedQuantity: nextReserved, stockQuantity: nextOnHand, updatedAt: now }).where(eq(inventory.id, inv.id));
         await tx.update(products).set({ stockQuantity: nextOnHand, updatedAt: now } as any).where(eq(products.id, r.productId));
       }
-      await tx.update(inventoryReservations).set({ status: "CONVERTED", convertedAt: now, updatedAt: now } as any).where(eq(inventoryReservations.id, r.id));
+      await tx.update(reservations).set({ status: "CONVERTED", convertedAt: now, updatedAt: now } as any).where(eq(reservations.id, r.id));
       await tx.insert(stockMovements).values({ id: crypto.randomUUID(), businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, productId: r.productId, quantityChange: -r.quantity, movementType: "sale", referenceType: "storefront_order_payment", referenceId: order.id, notes: `Paid storefront order ${order.orderNumber}`, performedByUserId: input.actorUserId, createdAt: now } as any);
     }
     await tx.update(payments).set({ status: "COMPLETED", transactionId: txId, paidAt: now, verifiedAt: now, verifiedByUserId: input.actorUserId, rejectionReason: null } as any).where(eq(payments.id, pay.id));
@@ -93,14 +93,14 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
 
 export async function expireReservations() {
   const now = new Date();
-  const expired = await db.select().from(inventoryReservations)
-    .where(and(eq(inventoryReservations.status, "RESERVED"), sql`${inventoryReservations.expiresAt} < ${now}`)).limit(200);
+  const expired = await db.select().from(reservations)
+    .where(and(eq(reservations.status, "RESERVED"), sql`${reservations.expiresAt} < ${now}`)).limit(200);
   let released = 0;
   for (const r of expired) {
     await db.transaction(async (tx: any) => {
-      const [cur] = await tx.select().from(inventoryReservations).where(eq(inventoryReservations.id, r.id)).limit(1).for("update");
+      const [cur] = await tx.select().from(reservations).where(eq(reservations.id, r.id)).limit(1).for("update");
       if (!cur || cur.status !== "RESERVED") return;
-      await tx.update(inventoryReservations).set({ status: "EXPIRED", updatedAt: now } as any).where(eq(inventoryReservations.id, r.id));
+      await tx.update(reservations).set({ status: "EXPIRED", updatedAt: now } as any).where(eq(reservations.id, r.id));
       const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, cur.productId), eq(inventory.storeId, DEFAULT_STORE_ID))).limit(1).for("update");
       if (inv) await tx.update(inventory).set({ reservedQuantity: Math.max(0, (inv.reservedQuantity ?? 0) - cur.quantity), updatedAt: now }).where(eq(inventory.id, inv.id));
       await tx.update(orders).set({ paymentStatus: sql`case when ${orders.paymentStatus} in ('PENDING','UNPAID') then 'EXPIRED' else ${orders.paymentStatus} end`, updatedAt: now } as any).where(eq(orders.id, cur.orderId));

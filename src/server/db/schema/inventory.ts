@@ -14,6 +14,7 @@ import { DEFAULT_BUSINESS_ID, DEFAULT_STORE_ID, inventorySchema } from "./schema
 import { businesses, stores } from "./core";
 import { products } from "./products";
 import { staff } from "./staff";
+import { orders, orderItems } from "./orders";
 
 const s = inventorySchema;
 
@@ -138,6 +139,50 @@ export const stockAdjustments = s.table(
     check(
       "StockAdjustments_AdjustmentType_check",
       sql`${t.adjustmentType} in ('increase', 'decrease', 'set')`
+    ),
+  ]
+);
+
+/** Stok yang di-hold untuk order hingga released/converted. */
+export const reservations = s.table(
+  "Reservations",
+  {
+    id: uuid("Id").defaultRandom().primaryKey(),
+    businessId: uuid("BusinessId")
+      .notNull()
+      .default(DEFAULT_BUSINESS_ID)
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    storeId: uuid("StoreId")
+      .notNull()
+      .default(DEFAULT_STORE_ID)
+      .references(() => stores.id, { onDelete: "cascade" }),
+    orderId: text("OrderId")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: text("OrderItemId").references(() => orderItems.id, {
+      onDelete: "cascade",
+    }),
+    productId: text("ProductId")
+      .notNull()
+      .references(() => products.id, { onDelete: "restrict" }),
+    quantity: integer("Quantity").notNull(),
+    status: text("Status").notNull().default("RESERVED"),
+    expiresAt: timestamp("ExpiresAt", { withTimezone: true }),
+    releasedAt: timestamp("ReleasedAt", { withTimezone: true }),
+    convertedAt: timestamp("ConvertedAt", { withTimezone: true }),
+    releaseReason: text("ReleaseReason"),
+    createdAt: timestamp("CreatedAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("UpdatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("Reservations_OrderId_idx").on(t.orderId),
+    index("Reservations_ProductId_idx").on(t.productId),
+    index("Reservations_Status_idx").on(t.status),
+    index("Reservations_ExpiresAt_idx").on(t.expiresAt),
+    check("Reservations_Quantity_check", sql`${t.quantity} > 0`),
+    check(
+      "Reservations_Status_check",
+      sql`${t.status} in ('RESERVED','RELEASED','CONVERTED','EXPIRED')`
     ),
   ]
 );

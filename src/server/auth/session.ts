@@ -39,7 +39,7 @@ export function hasRole(userRole: UserRole | undefined, required: UserRole) {
 }
 
 type SessionUser = {
-  id?: string | number;
+  id?: string;
   name?: string | null;
   email?: string | null;
 };
@@ -47,16 +47,17 @@ type SessionUser = {
 /**
  * Pastikan akun yang login punya baris di `core.UserProfiles`. Akun baru
  * otomatis mendapat role dasar `user`, bukan role operasional.
+ * Supabase Auth user ID is UUID, matches UserProfiles.Id (FK to auth.users).
  */
 export async function ensureUserProfile(user: SessionUser | null) {
   if (!user?.id) return null;
 
-  const neonAuthUserId = String(user.id);
+  const supabaseUserId = String(user.id);
 
   const [existing] = await db
     .select()
     .from(userProfiles)
-    .where(eq(userProfiles.userId, neonAuthUserId))
+    .where(eq(userProfiles.id, supabaseUserId))
     .limit(1);
 
   if (existing) return existing;
@@ -76,7 +77,7 @@ export async function ensureUserProfile(user: SessionUser | null) {
   const [created] = await db
     .insert(userProfiles)
     .values({
-      userId: neonAuthUserId,
+      id: supabaseUserId,
       name: user.name ?? null,
       email: user.email ?? null,
       role: DEFAULT_ROLE,
@@ -90,7 +91,7 @@ export async function ensureUserProfile(user: SessionUser | null) {
   const [fallback] = await db
     .select()
     .from(userProfiles)
-    .where(eq(userProfiles.userId, neonAuthUserId))
+    .where(eq(userProfiles.id, supabaseUserId))
     .limit(1);
 
   return fallback ?? null;
@@ -104,7 +105,7 @@ function readSessionUser(session: unknown): SessionUser | null {
 }
 
 /**
- * Ambil role pengguna saat ini dari sesi Neon Auth + tabel `core.UserProfiles`.
+ * Ambil role pengguna saat ini dari sesi Supabase Auth + tabel `core.UserProfiles`.
  * Profil dibuat otomatis dengan role `user` jika belum ada.
  */
 export async function getCurrentUserRole(): Promise<UserRole> {

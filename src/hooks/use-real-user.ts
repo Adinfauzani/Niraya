@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-import { authClient } from '@/lib/auth-client'
+import { supabaseClient } from '@/lib/auth-client'
 
 type RealUser = {
   name?: string
@@ -14,7 +13,7 @@ type RealUser = {
 type SessionUser = NonNullable<RealUser>
 
 /**
- * Loads the signed-in Neon Auth user plus the app role from
+ * Loads the signed-in Supabase Auth user plus the app role from
  * `core.UserProfiles` (via `/api/me`). New accounts default to `user`.
  */
 export function useRealUser(enabled: boolean) {
@@ -27,11 +26,10 @@ export function useRealUser(enabled: boolean) {
 
     const load = async () => {
       try {
-        const result: any = await authClient.getSession()
+        const { data: { session } } = await supabaseClient.auth.getSession()
         if (!active) return
 
-        const sessionUser: SessionUser | null =
-          result?.data?.user ?? result?.user ?? null
+        const sessionUser: SessionUser | null = session?.user ?? null
 
         if (!sessionUser) {
           setUser(null)
@@ -52,7 +50,7 @@ export function useRealUser(enabled: boolean) {
             }
           }
         } catch {
-          // Abaikan; fallback ke data sesi Neon Auth di bawah.
+          // Abaikan; fallback ke data sesi Supabase Auth di bawah.
         }
 
         if (active) setUser(sessionUser)

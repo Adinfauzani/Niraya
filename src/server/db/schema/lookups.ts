@@ -101,3 +101,26 @@ export const discounts = s.table(
     ),
   ]
 );
+
+/** Kategori bidang usaha untuk onboarding. */
+export const businessCategories = s.table(
+  "BusinessCategories",
+  {
+    code: text("Code").primaryKey(),
+    name: text("Name").notNull(),
+    description: text("Description"),
+    sortOrder: integer("SortOrder").notNull().default(0),
+    isActive: boolean("IsActive").notNull().default(true),
+    createdAt: timestamp("CreatedAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("UpdatedAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    unique("BusinessCategories_Name_key").on(t.name),
+    index("BusinessCategories_IsActive_idx").on(t.isActive),
+    index("BusinessCategories_SortOrder_idx").on(t.sortOrder),
+  ]
+);

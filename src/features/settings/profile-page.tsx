@@ -9,7 +9,7 @@ import { useRealUser } from "@/hooks/use-real-user"
 import { appRoleLabel } from "@/lib/business-labels"
 import { initials } from "@/features/customers/customer-detail-sheet"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format"
-import { authClient } from "@/lib/auth-client"
+import { supabaseClient } from "@/lib/auth-client"
 import { PublicNavigation } from "@/components/public/public-navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -74,7 +74,7 @@ export function ProfilePage() {
   }, [realUser?.id, realUser])
 
   const handleSignOut = async () => {
-    try { await authClient.signOut() } finally { router.replace("/login"); router.refresh() }
+    try { await supabaseClient.auth.signOut() } finally { router.replace("/login"); router.refresh() }
   }
 
   const summary = useMemo(() => {
@@ -97,6 +97,7 @@ export function ProfilePage() {
             <p className="mt-1 text-sm text-muted-foreground">Informasi akun dan aktivitas transaksi Anda.</p>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
+            <Button asChild variant="outline" className="rounded-xl"><Link href="/plans">Plans</Link></Button>
             {canAccessDashboard ? <Button asChild variant="outline" className="rounded-xl"><Link href="/dashboard"><LayoutDashboardIcon className="size-4" aria-hidden />Dashboard</Link></Button> : null}
             <PublicNavigation variant="desktop" />
           </div>

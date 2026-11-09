@@ -3,14 +3,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, StoreIcon, UserCircle2Icon } from "lucide-react";
+import { HomeIcon, SparklesIcon, StoreIcon, UserCircle2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
+import { supabaseClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Session, AuthChangeEvent } from "@supabase/supabase-js";
 
 type PublicNavItem = {
-  id: "home" | "menu" | "account";
+  id: "home" | "menu" | "plans" | "account";
   label: string;
   href: string;
   icon: typeof HomeIcon;
@@ -23,17 +24,42 @@ function initials(name?: string | null) {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("");
 }
 
-export function PublicNavigation({ className, variant = "responsive" }: { className?: string; variant?: "responsive" | "desktop" | "mobile" }) {
+export function PublicNavigation({
+  className,
+  variant = "responsive",
+}: { className?: string; variant?: "responsive" | "desktop" | "mobile" }) {
   const showDesktop = variant === "responsive" || variant === "desktop";
   const showMobile = variant === "responsive" || variant === "mobile";
   const pathname = usePathname();
-  const sessionState = (authClient as any).useSession?.() as
-    | { data?: { user?: { name?: string | null; image?: string | null } | null } | null; isPending?: boolean }
-    | undefined;
-  const isPending = sessionState === undefined ? true : !!sessionState?.isPending;
-  const user = sessionState?.data?.user ?? null;
+  const [session, setSession] = useState<Session | null>(null);
+  const [isPending, setIsPending] = useState(true);
+
+  useEffect(() => {
+    // Get initial session
+    supabaseClient.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
+      setSession(data.session);
+      setIsPending(false);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabaseClient.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+      setSession(session);
+      setIsPending(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const user = session?.user ?? null;
   const isAuthed = !!user;
-  const [indicator, setIndicator] = useState<{ x: number; w: number; ready: boolean }>({ x: 0, w: 0, ready: false });
+
+  const [indicator, setIndicator] = useState<{ x: number; w: number; ready: boolean }>({
+    x: 0,
+    w: 0,
+    ready: false,
+  });
   const mobileRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
 
   const mobileItems = useMemo<PublicNavItem[]>(() => {
@@ -42,7 +68,17 @@ export function PublicNavigation({ className, variant = "responsive" }: { classN
     return [
       { id: "home", label: "Beranda", href: "/", icon: HomeIcon, active: pathname === "/" },
       { id: "menu", label: "Menu", href: "/menu", icon: StoreIcon, active: pathname === "/menu" || pathname.startsWith("/menu/") },
-      { id: "account", label: accountLabel, href: accountHref, icon: UserCircle2Icon, active: pathname === "/profile" || pathname.startsWith("/profile/") || (!isAuthed && !isPending && (pathname === "/login" || pathname === "/signup" || pathname === "/register")) },
+      { id: "plans", label: "Plans", href: "/plans", icon: SparklesIcon, active: pathname === "/plans" || pathname.startsWith("/plans/") },
+      {
+        id: "account",
+        label: accountLabel,
+        href: accountHref,
+        icon: UserCircle2Icon,
+        active:
+          pathname === "/profile" ||
+          pathname.startsWith("/profile/") ||
+          (!isAuthed && !isPending && (pathname === "/login" || pathname === "/signup" || pathname === "/register")),
+      },
     ];
   }, [isAuthed, isPending, pathname]);
 
@@ -64,7 +100,10 @@ export function PublicNavigation({ className, variant = "responsive" }: { classN
     const activeRef = mobileRefs.current[activeId];
     if (activeRef?.parentElement) ro?.observe(activeRef.parentElement);
     window.addEventListener("resize", update);
-    return () => { ro?.disconnect(); window.removeEventListener("resize", update); };
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, [activeId, mobileItems, showMobile]);
 
   const indicatorStyle = {
@@ -88,10 +127,10 @@ export function PublicNavigation({ className, variant = "responsive" }: { classN
                 pathname.startsWith("/profile") && "ring-2 ring-foreground/10",
               )}
             >
-              {user?.image ? (
-                <img src={user.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+              {user?.user_metadata?.image ? (
+                <img src={user.user_metadata.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
               ) : (
-                <span aria-hidden>{initials(user?.name)}</span>
+                <span aria-hidden>{initials(user?.user_metadata?.name)}</span>
               )}
             </Link>
           ) : (
@@ -103,8 +142,13 @@ export function PublicNavigation({ className, variant = "responsive" }: { classN
       ) : null}
 
       {showMobile ? (
-        <nav aria-label="Navigasi publik mobile" className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] min-[400px]:px-4 lg:hidden">
-          <div className="relative mx-auto grid max-w-md grid-cols-3 items-center gap-1 rounded-[26px] border border-border/70 bg-background/84 p-1.5 shadow-[0_12px_40px_-20px_rgba(0,0,0,0.35)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/72 dark:shadow-[0_14px_44px_-22px_rgba(0,0,0,0.55)]">
+        <nav
+          aria-label="Navigasi publik mobile"
+          className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] min-[400px]:px-4 lg:hidden"
+        >
+          <div
+            className="relative mx-auto grid max-w-md grid-cols-4 items-center gap-1 rounded-[26px] border border-border/70 bg-background/84 p-1.5 shadow-[0_12px_40px_-20px_rgba(0,0,0,0.35)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/72 dark:shadow-[0_14px_44px_-22px_rgba(0,0,0,0.55)]"
+          >
             <span
               aria-hidden
               className="pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[20px] bg-foreground text-background shadow-sm transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none dark:bg-white dark:text-black"
@@ -116,7 +160,9 @@ export function PublicNavigation({ className, variant = "responsive" }: { classN
                 <Link
                   key={item.id}
                   href={item.href}
-                  ref={(el) => { mobileRefs.current[item.id] = el; }}
+                  ref={(el) => {
+                    mobileRefs.current[item.id] = el;
+                  }}
                   aria-current={item.active ? "page" : undefined}
                   aria-label={item.label}
                   className={cn(
@@ -131,7 +177,14 @@ export function PublicNavigation({ className, variant = "responsive" }: { classN
                       item.active ? "translate-y-[-0.5px] scale-[1.03]" : "opacity-80",
                     )}
                   />
-                  <span className={cn("truncate leading-none transition-opacity duration-200 motion-reduce:transition-none", item.active ? "opacity-100" : "opacity-90")}>{item.label}</span>
+                  <span
+                    className={cn(
+                      "truncate leading-none transition-opacity duration-200 motion-reduce:transition-none",
+                      item.active ? "opacity-100" : "opacity-90",
+                    )}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}

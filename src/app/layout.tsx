@@ -15,6 +15,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
   title: "Niraya POS",
   description: "Niraya POS - Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
   openGraph: {

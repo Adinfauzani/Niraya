@@ -26,10 +26,11 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-docs*
-scripts*
-/docs*
-/scripts*
+
+# local config directories
+.kilo/
+.config/
+drizzle/
 
 # vercel
 .vercel
@@ -37,9 +38,6 @@ scripts*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# drizzle
-drizzle/meta
 
 # ide
 .vscode
@@ -49,3 +47,4 @@ drizzle/meta
 *.bak
 *.orig
 *~
+docs/

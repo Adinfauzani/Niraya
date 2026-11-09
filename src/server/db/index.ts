@@ -1,13 +1,22 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema";
 
 const connectionString = process.env.DATABASE_URL || "postgres://dummy:dummy@localhost:5432/dummy";
 
 /**
- * Drizzle selalu menuliskan nama schema secara eksplisit (mis.
- * `"niraya"."products"`), jadi tidak perlu mengatur `search_path` di koneksi.
- * Ini juga menghindari batasan startup parameter pada koneksi pooled Neon.
+ * Supabase Transaction Pooler (port 6543) tidak support prepared statements.
+ * Gunakan postgres-js dengan { prepare: false }.
+ * Drizzle menulis nama schema eksplisit (mis. "niraya"."products"),
+ * sehingga tidak perlu `search_path`.
  */
-export const pool = new Pool({ connectionString });
+export const sql = postgres(connectionString, { prepare: false });
 
-export const db = drizzle(pool);
+export const db = drizzle(sql, { schema });
+
+export function createClient() {
+  return drizzle(sql, { schema });
+}
+
+export type DB = typeof db;
+export type Schema = typeof schema;

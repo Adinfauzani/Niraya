@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  BellIcon, Building2Icon, CreditCardIcon, DownloadIcon, EyeIcon, Loader2Icon,
+  BellIcon, Building2Icon, CreditCardIcon, DownloadIcon, Loader2Icon,
   MonitorIcon, MoonIcon, PaletteIcon, SaveIcon, ServerIcon, Settings2Icon,
   ShieldIcon, SunIcon, UserCircle2Icon,
 } from "lucide-react";
@@ -28,11 +28,89 @@ import { initials } from "@/features/customers/customer-detail-sheet";
 import { cn } from "@/lib/utils";
 
 type SettingsPayload = {
-  business: { id: string; name: string; address: string; phone: string; email: string; currency: string; timezone: string; status: string };
-  operational: { taxRatePercent: number; memberDiscountRatePercent: number; lowStockThreshold: number; reservationExpiryMinutes: number };
-  payment: { qrManualTransferEnabled: boolean; manualTransferBankName: string; manualTransferAccountName: string; manualTransferAccountNumber: string; manualTransferInstructions: string; paymentGatewayModuleStatus: string };
+  profile: {
+    businessName: string;
+    address: string;
+    phone: string;
+    email: string;
+    logoUrl: string | null;
+    description: string | null;
+    website: string | null;
+    socialMedia: string | null;
+  };
+  notifications: {
+    emailEnabled: boolean;
+    smsEnabled: boolean;
+    pushEnabled: boolean;
+    orderEmail: boolean;
+    orderSms: boolean;
+    orderPush: boolean;
+    lowStockEmail: boolean;
+    lowStockSms: boolean;
+    lowStockPush: boolean;
+    paymentEmail: boolean;
+    paymentSms: boolean;
+    paymentPush: boolean;
+    marketingEmail: boolean;
+  };
+  privacySecurity: {
+    dataRetentionDays: number;
+    sessionTimeoutMinutes: number;
+    requireTwoFactor: boolean;
+    allowPasswordLogin: boolean;
+    allowMagicLink: boolean;
+    allowSocialLogin: boolean;
+    auditLogEnabled: boolean;
+  };
+  account: {
+    defaultUserRole: string;
+    maxUsers: number;
+    autoApproveUsers: boolean;
+    requireEmailVerification: boolean;
+  };
+  appearance: {
+    theme: string;
+    primaryColor: string;
+    fontFamily: string;
+    language: string;
+    dateFormat: string;
+    timeFormat: string;
+    compactMode: boolean;
+  };
+  operational: {
+    currency: string;
+    timezone: string;
+    taxRate: string;
+    memberDiscountRate: string;
+    lowStockThreshold: number;
+    reservationExpiryMinutes: number;
+    autoCancelUnpaidOrders: boolean;
+    allowSplitPayment: boolean;
+  };
+  payment: {
+    paymentGatewayModuleStatus: string;
+    qrManualTransferEnabled: boolean;
+    manualTransferBankName: string;
+    manualTransferAccountName: string;
+    manualTransferAccountNumber: string;
+    manualTransferInstructions: string;
+    acceptCash: boolean;
+    acceptCard: boolean;
+    acceptQris: boolean;
+    acceptTransfer: boolean;
+  };
+  system: {
+    maintenanceMode: boolean;
+    maintenanceMessage: string | null;
+    debugMode: boolean;
+    apiRateLimit: number;
+    enableApiDocs: boolean;
+    backupEnabled: boolean;
+    backupFrequency: string;
+  };
   receipt: { footer: string };
   capabilities: Record<string, boolean>;
+  settingsState: string;
 };
 
 async function readJson<T>(res: Response): Promise<T> { return (await res.json().catch(() => ({}))) as T; }
@@ -49,43 +127,115 @@ async function saveSection(section: string, payload: unknown) {
   return data;
 }
 
-const businessSchema = z.object({
+const profileSchema = z.object({
   businessName: z.string().trim().min(1, "Nama bisnis wajib diisi").max(200),
   address: z.string().trim().max(1000),
   phone: z.string().trim().max(60),
   email: z.union([z.literal(""), z.string().trim().email("Format email tidak valid").max(160)]),
+  logoUrl: z.string().url().max(500).optional(),
+  description: z.string().trim().max(2000).optional(),
+  website: z.string().url().max(500).optional(),
+  socialMedia: z.string().trim().max(2000).optional(),
 });
+
+const notificationSchema = z.object({
+  emailEnabled: z.boolean().default(true),
+  smsEnabled: z.boolean().default(false),
+  pushEnabled: z.boolean().default(true),
+  orderEmail: z.boolean().default(true),
+  orderSms: z.boolean().default(false),
+  orderPush: z.boolean().default(true),
+  lowStockEmail: z.boolean().default(true),
+  lowStockSms: z.boolean().default(false),
+  lowStockPush: z.boolean().default(true),
+  paymentEmail: z.boolean().default(true),
+  paymentSms: z.boolean().default(false),
+  paymentPush: z.boolean().default(true),
+  marketingEmail: z.boolean().default(false),
+});
+
+const privacySecuritySchema = z.object({
+  dataRetentionDays: z.number().int().min(1).max(3650).default(365),
+  sessionTimeoutMinutes: z.number().int().min(5).max(10080).default(480),
+  requireTwoFactor: z.boolean().default(false),
+  allowPasswordLogin: z.boolean().default(true),
+  allowMagicLink: z.boolean().default(true),
+  allowSocialLogin: z.boolean().default(true),
+  auditLogEnabled: z.boolean().default(true),
+});
+
+const accountSchema = z.object({
+  defaultUserRole: z.enum(["owner", "admin", "manager", "cashier", "staff"]).default("cashier"),
+  maxUsers: z.number().int().min(1).max(1000).default(50),
+  autoApproveUsers: z.boolean().default(false),
+  requireEmailVerification: z.boolean().default(true),
+});
+
+const appearanceSchema = z.object({
+  theme: z.enum(["light", "dark", "system"]).default("system"),
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#2563eb"),
+  fontFamily: z.string().trim().max(100).default("system"),
+  language: z.enum(["id", "en"]).default("id"),
+  dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).default("DD/MM/YYYY"),
+  timeFormat: z.enum(["12h", "24h"]).default("24h"),
+  compactMode: z.boolean().default(false),
+});
+
 const operationalSchema = z.object({
-  currency: z.literal("IDR"),
-  timezone: z.enum(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]),
+  currency: z.literal("IDR").default("IDR"),
+  timezone: z.enum(["Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"]).default("Asia/Jakarta"),
   taxRatePercent: z.number().min(0).max(100),
   memberDiscountRatePercent: z.number().min(0).max(100),
   lowStockThreshold: z.number().int().min(0).max(100000),
   reservationExpiryMinutes: z.number().int().min(5).max(1440),
+  autoCancelUnpaidOrders: z.boolean().default(true),
+  allowSplitPayment: z.boolean().default(true),
 });
+
 const paymentSchema = z.object({
-  qrManualTransferEnabled: z.boolean(),
-  manualTransferBankName: z.string().trim().max(120),
-  manualTransferAccountName: z.string().trim().max(120),
-  manualTransferAccountNumber: z.string().trim().max(120),
-  manualTransferInstructions: z.string().trim().max(1000),
+  paymentGatewayModuleStatus: z.enum(["NOT_INSTALLED", "INSTALLED", "CONFIGURED"]).default("NOT_INSTALLED"),
+  qrManualTransferEnabled: z.boolean().default(false),
+  manualTransferBankName: z.string().trim().max(120).default(""),
+  manualTransferAccountName: z.string().trim().max(120).default(""),
+  manualTransferAccountNumber: z.string().trim().max(120).default(""),
+  manualTransferInstructions: z.string().trim().max(1000).default(""),
+  acceptCash: z.boolean().default(true),
+  acceptCard: z.boolean().default(false),
+  acceptQris: z.boolean().default(false),
+  acceptTransfer: z.boolean().default(true),
 });
+
+const systemSchema = z.object({
+  maintenanceMode: z.boolean().default(false),
+  maintenanceMessage: z.string().trim().max(1000).optional(),
+  debugMode: z.boolean().default(false),
+  apiRateLimit: z.number().int().min(10).max(10000).default(100),
+  enableApiDocs: z.boolean().default(false),
+  backupEnabled: z.boolean().default(true),
+  backupFrequency: z.enum(["daily", "weekly", "monthly"]).default("daily"),
+});
+
 const receiptSchema = z.object({ receiptFooter: z.string().trim().max(240) });
 
-type BusinessValues = z.input<typeof businessSchema>;
+type ProfileValues = z.input<typeof profileSchema>;
+type NotificationValues = z.input<typeof notificationSchema>;
+type PrivacySecurityValues = z.input<typeof privacySecuritySchema>;
+type AccountValues = z.input<typeof accountSchema>;
+type AppearanceValues = z.input<typeof appearanceSchema>;
 type OperationalValues = z.input<typeof operationalSchema>;
 type PaymentValues = z.input<typeof paymentSchema>;
+type SystemValues = z.input<typeof systemSchema>;
 type ReceiptValues = z.input<typeof receiptSchema>;
 
 const TABS = [
-  { value: "profil-bisnis", label: "Profil Bisnis", icon: Building2Icon },
-  { value: "notifikasi", label: "Notifikasi", icon: BellIcon },
-  { value: "privacy-security", label: "Privacy & Security", icon: ShieldIcon },
-  { value: "akun", label: "Akun", icon: UserCircle2Icon },
-  { value: "tampilan", label: "Tampilan", icon: PaletteIcon },
-  { value: "operasional", label: "Operasional", icon: Settings2Icon },
-  { value: "pembayaran", label: "Pembayaran", icon: CreditCardIcon },
-  { value: "sistem", label: "Sistem", icon: ServerIcon },
+  { value: "profil-bisnis", label: "Profil Bisnis", icon: Building2Icon, section: "profile" },
+  { value: "notifikasi", label: "Notifikasi", icon: BellIcon, section: "notifications" },
+  { value: "privacy-security", label: "Privacy & Security", icon: ShieldIcon, section: "privacySecurity" },
+  { value: "akun", label: "Akun", icon: UserCircle2Icon, section: "account" },
+  { value: "tampilan", label: "Tampilan", icon: PaletteIcon, section: "appearance" },
+  { value: "operasional", label: "Operasional", icon: Settings2Icon, section: "operational" },
+  { value: "pembayaran", label: "Pembayaran", icon: CreditCardIcon, section: "payment" },
+  { value: "sistem", label: "Sistem", icon: ServerIcon, section: "system" },
 ] as const;
 
 function SectionShell({ title, description, children, actions }: { title: string; description?: string; children: ReactNode; actions?: ReactNode }) {
@@ -125,6 +275,18 @@ function Unavailable({ title, description }: { title: string; description: strin
   );
 }
 
+function SwitchRow({ label, description, checked, onChange, disabled }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium">{label}</p>
+        {description ? <p className="text-[13px] text-muted-foreground">{description}</p> : null}
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const realUser = useRealUser(true) as any;
@@ -139,9 +301,14 @@ export function SettingsPage() {
   const canManageBusiness = role ? ["owner", "admin", "manager"].includes(role) : false;
   const readOnlyBusiness = !canManageBusiness;
 
-  const businessForm = useForm<BusinessValues>({ resolver: zodResolver(businessSchema) as any, defaultValues: { businessName: "", address: "", phone: "", email: "" } });
-  const operationalForm = useForm<OperationalValues>({ resolver: zodResolver(operationalSchema) as any, defaultValues: { currency: "IDR", timezone: "Asia/Jakarta", taxRatePercent: 0, memberDiscountRatePercent: 0, lowStockThreshold: 0, reservationExpiryMinutes: 30 } });
-  const paymentForm = useForm<PaymentValues>({ resolver: zodResolver(paymentSchema) as any, defaultValues: { qrManualTransferEnabled: false, manualTransferBankName: "", manualTransferAccountName: "", manualTransferAccountNumber: "", manualTransferInstructions: "" } });
+  const profileForm = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) as any, defaultValues: { businessName: "", address: "", phone: "", email: "", logoUrl: "", description: "", website: "", socialMedia: "" } });
+  const notificationForm = useForm<NotificationValues>({ resolver: zodResolver(notificationSchema) as any, defaultValues: { emailEnabled: true, smsEnabled: false, pushEnabled: true, orderEmail: true, orderSms: false, orderPush: true, lowStockEmail: true, lowStockSms: false, lowStockPush: true, paymentEmail: true, paymentSms: false, paymentPush: true, marketingEmail: false } });
+  const privacySecurityForm = useForm<PrivacySecurityValues>({ resolver: zodResolver(privacySecuritySchema) as any, defaultValues: { dataRetentionDays: 365, sessionTimeoutMinutes: 480, requireTwoFactor: false, allowPasswordLogin: true, allowMagicLink: true, allowSocialLogin: true, auditLogEnabled: true } });
+  const accountForm = useForm<AccountValues>({ resolver: zodResolver(accountSchema) as any, defaultValues: { defaultUserRole: "cashier", maxUsers: 50, autoApproveUsers: false, requireEmailVerification: true } });
+  const appearanceForm = useForm<AppearanceValues>({ resolver: zodResolver(appearanceSchema) as any, defaultValues: { theme: "system", primaryColor: "#2563eb", fontFamily: "system", language: "id", dateFormat: "DD/MM/YYYY", timeFormat: "24h", compactMode: false } });
+  const operationalForm = useForm<OperationalValues>({ resolver: zodResolver(operationalSchema) as any, defaultValues: { currency: "IDR", timezone: "Asia/Jakarta", taxRatePercent: 0, memberDiscountRatePercent: 0, lowStockThreshold: 0, reservationExpiryMinutes: 30, autoCancelUnpaidOrders: true, allowSplitPayment: true } });
+  const paymentForm = useForm<PaymentValues>({ resolver: zodResolver(paymentSchema) as any, defaultValues: { paymentGatewayModuleStatus: "NOT_INSTALLED", qrManualTransferEnabled: false, manualTransferBankName: "", manualTransferAccountName: "", manualTransferAccountNumber: "", manualTransferInstructions: "", acceptCash: true, acceptCard: false, acceptQris: false, acceptTransfer: true } });
+  const systemForm = useForm<SystemValues>({ resolver: zodResolver(systemSchema) as any, defaultValues: { maintenanceMode: false, maintenanceMessage: "", debugMode: false, apiRateLimit: 100, enableApiDocs: false, backupEnabled: true, backupFrequency: "daily" } });
   const receiptForm = useForm<ReceiptValues>({ resolver: zodResolver(receiptSchema) as any, defaultValues: { receiptFooter: "" } });
 
   useEffect(() => {
@@ -152,9 +319,14 @@ export function SettingsPage() {
         const d = await fetchSettings();
         if (!active) return;
         setData(d);
-        businessForm.reset({ businessName: d.business.name, address: d.business.address || "", phone: d.business.phone || "", email: d.business.email || "" });
-        operationalForm.reset({ currency: "IDR", timezone: (d.business.timezone as OperationalValues["timezone"]) || "Asia/Jakarta", taxRatePercent: d.operational.taxRatePercent, memberDiscountRatePercent: d.operational.memberDiscountRatePercent, lowStockThreshold: d.operational.lowStockThreshold, reservationExpiryMinutes: d.operational.reservationExpiryMinutes });
-        paymentForm.reset({ qrManualTransferEnabled: d.payment.qrManualTransferEnabled, manualTransferBankName: d.payment.manualTransferBankName || "", manualTransferAccountName: d.payment.manualTransferAccountName || "", manualTransferAccountNumber: d.payment.manualTransferAccountNumber || "", manualTransferInstructions: d.payment.manualTransferInstructions || "" });
+        profileForm.reset({ businessName: d.profile.businessName, address: d.profile.address || "", phone: d.profile.phone || "", email: d.profile.email || "", logoUrl: d.profile.logoUrl || "", description: d.profile.description || "", website: d.profile.website || "", socialMedia: d.profile.socialMedia || "" });
+        notificationForm.reset(d.notifications as NotificationValues);
+        privacySecurityForm.reset(d.privacySecurity as PrivacySecurityValues);
+        accountForm.reset({ defaultUserRole: d.account.defaultUserRole as "owner" | "admin" | "manager" | "cashier" | "staff", maxUsers: d.account.maxUsers, autoApproveUsers: d.account.autoApproveUsers, requireEmailVerification: d.account.requireEmailVerification });
+        appearanceForm.reset({ theme: d.appearance.theme as "light" | "dark" | "system", primaryColor: d.appearance.primaryColor, fontFamily: d.appearance.fontFamily, language: d.appearance.language as "id" | "en", dateFormat: d.appearance.dateFormat as "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD", timeFormat: d.appearance.timeFormat as "12h" | "24h", compactMode: d.appearance.compactMode });
+        operationalForm.reset({ currency: "IDR" as const, timezone: d.operational.timezone as "Asia/Jakarta" | "Asia/Makassar" | "Asia/Jayapura", taxRatePercent: Number(d.operational.taxRate) * 100, memberDiscountRatePercent: Number(d.operational.memberDiscountRate) * 100, lowStockThreshold: d.operational.lowStockThreshold, reservationExpiryMinutes: d.operational.reservationExpiryMinutes, autoCancelUnpaidOrders: d.operational.autoCancelUnpaidOrders, allowSplitPayment: d.operational.allowSplitPayment });
+        paymentForm.reset({ paymentGatewayModuleStatus: d.payment.paymentGatewayModuleStatus as "NOT_INSTALLED" | "INSTALLED" | "CONFIGURED", qrManualTransferEnabled: d.payment.qrManualTransferEnabled, manualTransferBankName: d.payment.manualTransferBankName, manualTransferAccountName: d.payment.manualTransferAccountName, manualTransferAccountNumber: d.payment.manualTransferAccountNumber, manualTransferInstructions: d.payment.manualTransferInstructions, acceptCash: d.payment.acceptCash, acceptCard: d.payment.acceptCard, acceptQris: d.payment.acceptQris, acceptTransfer: d.payment.acceptTransfer });
+        systemForm.reset({ maintenanceMode: d.system.maintenanceMode, maintenanceMessage: d.system.maintenanceMessage || undefined, debugMode: d.system.debugMode, apiRateLimit: d.system.apiRateLimit, enableApiDocs: d.system.enableApiDocs, backupEnabled: d.system.backupEnabled, backupFrequency: d.system.backupFrequency as "daily" | "weekly" | "monthly" });
         receiptForm.reset({ receiptFooter: d.receipt.footer || "" });
         setLoadError(null);
       } catch (e: any) { if (active) setLoadError(e?.message || "Gagal memuat pengaturan."); }
@@ -164,7 +336,7 @@ export function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function onSave(section: "business" | "operational" | "payment" | "receipt", values: unknown, form: any) {
+  async function onSave(section: string, values: unknown, form: any) {
     setSaving(section);
     try {
       await saveSection(section, values);
@@ -224,27 +396,44 @@ export function SettingsPage() {
           ) : (
             <>
               <TabsContent value="profil-bisnis" className="mt-0">
-                <Form {...businessForm}>
-                  <form onSubmit={businessForm.handleSubmit((v) => onSave("business", v, businessForm))}>
-                    <SectionShell title="Profil Bisnis" description="Identitas yang ditampilkan kepada pelanggan." actions={saveButton("business", !businessForm.formState.isDirty)}>
+                <Form {...profileForm}>
+                  <form onSubmit={profileForm.handleSubmit((v) => onSave("profile", v, profileForm))}>
+                    <SectionShell title="Profil Bisnis" description="Identitas yang ditampilkan kepada pelanggan." actions={saveButton("profile", !profileForm.formState.isDirty)}>
                       {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akun Anda memiliki akses baca. Perubahan bisnis memerlukan peran admin/manager/owner.</p> : null}
                       <FieldGrid>
-                        <FormField control={businessForm.control} name="businessName" render={({ field }) => (
+                        <FormField control={profileForm.control} name="businessName" render={({ field }) => (
                           <FormItem className="sm:col-span-2"><FormLabel>Nama Bisnis</FormLabel><FormControl><Input placeholder="Nama toko" className="h-10 rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
-                        <FormField control={businessForm.control} name="email" render={({ field }) => (
+                        <FormField control={profileForm.control} name="email" render={({ field }) => (
                           <FormItem><FormLabel>Email bisnis</FormLabel><FormControl><Input type="email" placeholder="hello@bisnis.id" className="h-10 rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
-                        <FormField control={businessForm.control} name="phone" render={({ field }) => (
+                        <FormField control={profileForm.control} name="phone" render={({ field }) => (
                           <FormItem><FormLabel>Telepon</FormLabel><FormControl><Input placeholder="+62..." className="h-10 rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
-                        <FormField control={businessForm.control} name="address" render={({ field }) => (
+                        <FormField control={profileForm.control} name="address" render={({ field }) => (
                           <FormItem className="sm:col-span-2"><FormLabel>Alamat</FormLabel><FormControl><Textarea rows={3} placeholder="Alamat lengkap bisnis..." className="rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
                       </FieldGrid>
                       <div className="space-y-3">
                         <p className="text-sm font-medium">Informasi tambahan</p>
-                        <Unavailable title="Logo, deskripsi, website, dan media sosial" description="Belum ada kolom persistensi terverifikasi di schema pengaturan bisnis saat ini. Bagian ini tidak menyimpan data palsu; perlu penambahan field additive terpisah bila disetujui." />
+                        <FieldGrid>
+                          <FormField control={profileForm.control} name="logoUrl" render={({ field }) => (
+                            <FormItem><FormLabel>Logo URL</FormLabel><FormControl><Input type="url" placeholder="https://..." className="h-10 rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormDescription>URL logo bisnis (akan ditampilkan di struk/public).</FormDescription><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={profileForm.control} name="website" render={({ field }) => (
+                            <FormItem><FormLabel>Website</FormLabel><FormControl><Input type="url" placeholder="https://bisnis.id" className="h-10 rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={profileForm.control} name="description" render={({ field }) => (
+                            <FormItem className="sm:col-span-2"><FormLabel>Deskripsi</FormLabel><FormControl><Textarea rows={3} placeholder="Deskripsi singkat bisnis..." className="rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
+                          )} />
+<FormField control={profileForm.control} name="socialMedia" render={({ field }) => {
+                            const placeholder = '{"instagram": "@toko", "facebook": "toko"}';
+                            const description = 'Format JSON. Contoh: {"instagram": "@toko", "facebook": "toko"}';
+                            return (
+                              <FormItem className="sm:col-span-2"><FormLabel>Media Sosial (JSON)</FormLabel><FormControl><Textarea rows={3} placeholder={placeholder} className="rounded-xl font-mono text-[12px]" disabled={readOnlyBusiness} {...field} /></FormControl><FormDescription>{description}</FormDescription><FormMessage /></FormItem>
+                            );
+                          }} />
+                        </FieldGrid>
                       </div>
                     </SectionShell>
                   </form>
@@ -252,72 +441,160 @@ export function SettingsPage() {
               </TabsContent>
 
               <TabsContent value="notifikasi" className="mt-0">
-                <SectionShell title="Notifikasi" description="Preferensi notifikasi yang didukung aplikasi.">
-                  <Unavailable title="Channel notifikasi belum terintegrasi" description="Email, WhatsApp, SMS, dan push notification belum memiliki integrasi pengiriman terverifikasi di codebase ini. Tab ini tidak mensimulasikan pengiriman." />
-                  <div className="rounded-xl border border-border/70">
-                    {[
-                      ["Notifikasi pesanan", "Belum tersedia — memerlukan event/worker dan channel terintegrasi."],
-                      ["Notifikasi pembayaran", "Belum tersedia — verifikasi pembayaran manual saat ini dikelola staff."],
-                      ["Notifikasi stok menipis", "Ambang stok tersedia di Operasional; pengiriman notifikasi otomatis belum terintegrasi."],
-                      ["Notifikasi sistem", "Belum tersedia."],
-                    ].map(([k, v]) => <InfoRow key={k} label={k} value={<span className="text-muted-foreground font-normal">{v}</span>} />)}
-                  </div>
-                </SectionShell>
+                <Form {...notificationForm}>
+                  <form onSubmit={notificationForm.handleSubmit((v) => onSave("notifications", v, notificationForm))}>
+                    <SectionShell title="Notifikasi" description="Preferensi channel notifikasi." actions={saveButton("notifications", !notificationForm.formState.isDirty)}>
+                      {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium">Channel Kirim</p>
+                        <div className="rounded-xl border border-border/70 p-4 space-y-3">
+                          <FieldGrid>
+                            <FormField control={notificationForm.control} name="emailEnabled" render={({ field }) => (<FormItem className="flex items-center gap-3">{field.value ? <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Email" /> : <span className="text-sm text-muted-foreground">Email</span>}{!field.value && <span className="text-sm text-muted-foreground">Email</span>}</FormItem>)} />
+                            <FormField control={notificationForm.control} name="smsEnabled" render={({ field }) => (<FormItem className="flex items-center gap-3">{field.value ? <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="SMS" /> : <span className="text-sm text-muted-foreground">SMS</span>}{!field.value && <span className="text-sm text-muted-foreground">SMS</span>}</FormItem>)} />
+                            <FormField control={notificationForm.control} name="pushEnabled" render={({ field }) => (<FormItem className="flex items-center gap-3">{field.value ? <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Push" /> : <span className="text-sm text-muted-foreground">Push</span>}{!field.value && <span className="text-sm text-muted-foreground">Push</span>}</FormItem>)} />
+                          </FieldGrid>
+                        </div>
+                        <p className="text-sm font-medium">Per-Event</p>
+                        <div className="rounded-xl border border-border/70 p-4 space-y-3">
+                          <FieldGrid>
+                            <SwitchRow label="Pesanan (Email)" checked={data?.notifications.orderEmail || false} onChange={(v) => notificationForm.setValue("orderEmail", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Pesanan (SMS)" checked={data?.notifications.orderSms || false} onChange={(v) => notificationForm.setValue("orderSms", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Pesanan (Push)" checked={data?.notifications.orderPush || false} onChange={(v) => notificationForm.setValue("orderPush", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Pembayaran (Email)" checked={data?.notifications.paymentEmail || false} onChange={(v) => notificationForm.setValue("paymentEmail", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Pembayaran (SMS)" checked={data?.notifications.paymentSms || false} onChange={(v) => notificationForm.setValue("paymentSms", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Pembayaran (Push)" checked={data?.notifications.paymentPush || false} onChange={(v) => notificationForm.setValue("paymentPush", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Stok Menipis (Email)" checked={data?.notifications.lowStockEmail || false} onChange={(v) => notificationForm.setValue("lowStockEmail", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Stok Menipis (SMS)" checked={data?.notifications.lowStockSms || false} onChange={(v) => notificationForm.setValue("lowStockSms", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Stok Menipis (Push)" checked={data?.notifications.lowStockPush || false} onChange={(v) => notificationForm.setValue("lowStockPush", v)} disabled={readOnlyBusiness} />
+                            <SwitchRow label="Pemasaran (Email)" checked={data?.notifications.marketingEmail || false} onChange={(v) => notificationForm.setValue("marketingEmail", v)} disabled={readOnlyBusiness} />
+                          </FieldGrid>
+                        </div>
+                      </div>
+                    </SectionShell>
+                  </form>
+                </Form>
               </TabsContent>
 
               <TabsContent value="privacy-security" className="mt-0">
-                <SectionShell title="Privacy & Security" description="Informasi keamanan akun dan batasan yang berlaku.">
-                  <div className="rounded-xl border border-border/70 px-4 py-1">
-                    <InfoRow label="Autentikasi" value="Neon Auth" />
-                    <InfoRow label="Akun aktif" value={realUser?.email || "-"} />
-                    <InfoRow label="Peran aplikasi" value={appRoleLabel(realUser?.role)} />
-                    <InfoRow label="Token/kredensial" value={<span className="text-muted-foreground font-normal">Tidak ditampilkan di UI</span>} />
-                  </div>
-                  <Unavailable title="Manajemen sesi & perubahan password" description="Fitur manajemen sesi/password bergantung pada kemampuan Neon Auth client/server yang terkonfigurasi dan alur verifikasi. UI ini tidak mengimplementasikan kontrol keamanan palsu atau bypass." />
-                </SectionShell>
+                <Form {...privacySecurityForm}>
+                  <form onSubmit={privacySecurityForm.handleSubmit((v) => onSave("privacySecurity", v, privacySecurityForm))}>
+                    <SectionShell title="Privacy & Security" description="Retensi data, sesi, dan kontrol keamanan." actions={saveButton("privacySecurity", !privacySecurityForm.formState.isDirty)}>
+                      {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
+                      <div className="rounded-xl border border-border/70 p-4 space-y-4">
+                        <FieldGrid>
+                          <FormField control={privacySecurityForm.control} name="dataRetentionDays" render={({ field }) => (
+                            <FormItem><FormLabel>Retensi Data (hari)</FormLabel><FormControl><Input type="number" min={1} max={3650} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 365 : Math.floor(Number(e.target.value)))} /></FormControl><FormDescription>Berapa lama data transaksi/log disimpan sebelum dihapus otomatis.</FormDescription><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={privacySecurityForm.control} name="sessionTimeoutMinutes" render={({ field }) => (
+                            <FormItem><FormLabel>Timeout Sesi (menit)</FormLabel><FormControl><Input type="number" min={5} max={10080} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 480 : Math.floor(Number(e.target.value)))} /></FormControl><FormDescription>Durasi tidak aktif sebelum logout otomatis.</FormDescription><FormMessage /></FormItem>
+                          )} />
+                        </FieldGrid>
+                        <div className="space-y-3 border-t border-border/60 pt-4">
+                          <SwitchRow label="Wajib 2FA" checked={data?.privacySecurity.requireTwoFactor || false} onChange={(v) => privacySecurityForm.setValue("requireTwoFactor", v)} disabled={readOnlyBusiness} description="Mengharuskan verifikasi 2-faktor untuk login staff." />
+                          <SwitchRow label="Login Password" checked={data?.privacySecurity.allowPasswordLogin || true} onChange={(v) => privacySecurityForm.setValue("allowPasswordLogin", v)} disabled={readOnlyBusiness} description="Izinkan login dengan email/password." />
+                          <SwitchRow label="Magic Link" checked={data?.privacySecurity.allowMagicLink || true} onChange={(v) => privacySecurityForm.setValue("allowMagicLink", v)} disabled={readOnlyBusiness} description="Izinkan login via magic link email." />
+                          <SwitchRow label="Social Login" checked={data?.privacySecurity.allowSocialLogin || true} onChange={(v) => privacySecurityForm.setValue("allowSocialLogin", v)} disabled={readOnlyBusiness} description="Izinkan login via Google/GitHub/Microsoft." />
+                          <SwitchRow label="Audit Log" checked={data?.privacySecurity.auditLogEnabled || true} onChange={(v) => privacySecurityForm.setValue("auditLogEnabled", v)} disabled={readOnlyBusiness} description="Catat aktivitas sensitif ke audit log." />
+                        </div>
+                        <p className="text-[13px] text-muted-foreground">Penegakan sesi/password/2FA bergantung pada konfigurasi Neon Auth. UI ini menyimpan preferensi bisnis; implementasi penuh memerlukan dukungan Neon Auth server.</p>
+                      </div>
+                    </SectionShell>
+                  </form>
+                </Form>
               </TabsContent>
 
               <TabsContent value="akun" className="mt-0">
-                <SectionShell title="Akun" description="Informasi akun pengguna yang sedang login.">
-                  <div className="flex items-center gap-3 rounded-xl border border-border/70 p-4">
-                    <Avatar className="size-12"><AvatarFallback className="text-sm font-semibold">{initials(realUser?.name || "Akun")}</AvatarFallback></Avatar>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{realUser?.name || "Akun terdaftar"}</p>
-                      <p className="truncate text-sm text-muted-foreground">{realUser?.email || "-"}</p>
-                    </div>
-                    <Badge variant="secondary" className="ml-auto rounded-full">{appRoleLabel(realUser?.role)}</Badge>
-                  </div>
-                  <div className="rounded-xl border border-border/70 px-4 py-1">
-                    <InfoRow label="User ID" value={<span className="font-mono text-[12px]">{realUser?.id || "-"}</span>} />
-                    <InfoRow label="Provider" value="Neon Auth" />
-                    <InfoRow label="Profil aplikasi" value={realUser?.createdAt ? "Tersedia" : "Aktif"} />
-                  </div>
-                  <p className="text-[13px] text-muted-foreground">Perubahan profil/auth sensitif tetap melalui Neon Auth. Data akun dipisah dari data profil bisnis.</p>
-                </SectionShell>
+                <Form {...accountForm}>
+                  <form onSubmit={accountForm.handleSubmit((v) => onSave("account", v, accountForm))}>
+                    <SectionShell title="Akun" description="Preferensi manajemen akun pengguna." actions={saveButton("account", !accountForm.formState.isDirty)}>
+                      {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
+                      <div className="flex items-center gap-3 rounded-xl border border-border/70 p-4">
+                        <Avatar className="size-12"><AvatarFallback className="text-sm font-semibold">{initials(realUser?.name || "Akun")}</AvatarFallback></Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{realUser?.name || "Akun terdaftar"}</p>
+                          <p className="truncate text-sm text-muted-foreground">{realUser?.email || "-"}</p>
+                        </div>
+                        <Badge variant="secondary" className="ml-auto rounded-full">{appRoleLabel(realUser?.role)}</Badge>
+                      </div>
+                      <div className="rounded-xl border border-border/70 px-4 py-1">
+                        <InfoRow label="User ID" value={<span className="font-mono text-[12px]">{realUser?.id || "-"}</span>} />
+                        <InfoRow label="Provider" value="Neon Auth" />
+                        <InfoRow label="Profil aplikasi" value={realUser?.createdAt ? "Tersedia" : "Aktif"} />
+                      </div>
+                      <div className="space-y-3 border-t border-border/60 pt-4">
+                        <FieldGrid>
+                          <FormField control={accountForm.control} name="defaultUserRole" render={({ field }) => (
+                            <FormItem><FormLabel>Peran default user baru</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={readOnlyBusiness}><FormControl><SelectTrigger className="h-10 w-full rounded-xl"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="owner">Owner</SelectItem><SelectItem value="admin">Admin</SelectItem><SelectItem value="manager">Manager</SelectItem><SelectItem value="cashier">Cashier</SelectItem><SelectItem value="staff">Staff</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={accountForm.control} name="maxUsers" render={({ field }) => (
+                            <FormItem><FormLabel>Maksimal user</FormLabel><FormControl><Input type="number" min={1} max={1000} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 50 : Math.floor(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                        </FieldGrid>
+                        <div className="space-y-3">
+                          <SwitchRow label="Auto-approve pendaftaran" checked={data?.account.autoApproveUsers || false} onChange={(v) => accountForm.setValue("autoApproveUsers", v)} disabled={readOnlyBusiness} description="User baru langsung aktif tanpa persetujuan admin." />
+                          <SwitchRow label="Wajib verifikasi email" checked={data?.account.requireEmailVerification || true} onChange={(v) => accountForm.setValue("requireEmailVerification", v)} disabled={readOnlyBusiness} description="User harus verifikasi email sebelum login." />
+                        </div>
+                        <p className="text-[13px] text-muted-foreground">Perubahan profil/auth sensitif tetap melalui Neon Auth. Data akun dipisah dari data profil bisnis.</p>
+                      </div>
+                    </SectionShell>
+                  </form>
+                </Form>
               </TabsContent>
 
               <TabsContent value="tampilan" className="mt-0">
-                <SectionShell title="Tampilan" description="Preferensi tampilan aplikasi pada perangkat ini.">
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium">Tema</p>
-                    <div className="grid grid-cols-3 gap-2 sm:max-w-md">
-                      {([
-                        { value: "light", label: "Terang", icon: SunIcon },
-                        { value: "dark", label: "Gelap", icon: MoonIcon },
-                        { value: "system", label: "Sistem", icon: MonitorIcon },
-                      ] as const).map((opt) => {
-                        const Icon = opt.icon; const active = theme === opt.value;
-                        return (
-                          <button key={opt.value} type="button" aria-pressed={active} onClick={() => setTheme(opt.value)}
-                            className={cn("flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "border-primary/40 bg-primary/[0.04] text-foreground" : "border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground")}>
-                            <Icon className="size-4" aria-hidden />{opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[13px] text-muted-foreground">Tema disimpan oleh theme provider aplikasi pada perangkat/browser ini.</p>
-                  </div>
-                </SectionShell>
+                <Form {...appearanceForm}>
+                  <form onSubmit={appearanceForm.handleSubmit((v) => onSave("appearance", v, appearanceForm))}>
+                    <SectionShell title="Tampilan" description="Preferensi tampilan aplikasi pada perangkat ini." actions={saveButton("appearance", !appearanceForm.formState.isDirty)}>
+                      {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm font-medium">Tema</p>
+                          <div className="grid grid-cols-3 gap-2 sm:max-w-md mt-2">
+                            {([
+                              { value: "light", label: "Terang", icon: SunIcon },
+                              { value: "dark", label: "Gelap", icon: MoonIcon },
+                              { value: "system", label: "Sistem", icon: MonitorIcon },
+                            ] as const).map((opt) => {
+                              const Icon = opt.icon; const active = theme === opt.value;
+                              return (
+                                <button key={opt.value} type="button" aria-pressed={active} onClick={() => setTheme(opt.value)}
+                                  className={cn("flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "border-primary/40 bg-primary/[0.04] text-foreground" : "border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground")}>
+                                  <Icon className="size-4" aria-hidden />{opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-2 text-[13px] text-muted-foreground">Tema disimpan oleh theme provider aplikasi pada perangkat/browser ini.</p>
+                        </div>
+                        <div className="rounded-xl border border-border/70 p-4 space-y-3">
+                          <FieldGrid>
+                            <FormField control={appearanceForm.control} name="primaryColor" render={({ field }) => (
+                              <FormItem><FormLabel>Warna utama (Hex)</FormLabel><FormControl><Input type="color" className="h-10 w-full rounded-xl cursor-pointer" disabled={readOnlyBusiness} {...field} /></FormControl><FormDescription>Warna aksen aplikasi (format #RRGGBB).</FormDescription><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={appearanceForm.control} name="fontFamily" render={({ field }) => (
+                              <FormItem><FormLabel>Font family</FormLabel><FormControl><Input placeholder="system / Inter / ..." className="h-10 rounded-xl" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={appearanceForm.control} name="language" render={({ field }) => (
+                              <FormItem><FormLabel>Bahasa</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={readOnlyBusiness}><FormControl><SelectTrigger className="h-10 w-full rounded-xl"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="id">Indonesia</SelectItem><SelectItem value="en">English</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={appearanceForm.control} name="dateFormat" render={({ field }) => (
+                              <FormItem><FormLabel>Format tanggal</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={readOnlyBusiness}><FormControl><SelectTrigger className="h-10 w-full rounded-xl"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem><SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem><SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={appearanceForm.control} name="timeFormat" render={({ field }) => (
+                              <FormItem><FormLabel>Format waktu</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={readOnlyBusiness}><FormControl><SelectTrigger className="h-10 w-full rounded-xl"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="24h">24 jam</SelectItem><SelectItem value="12h">12 jam</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={appearanceForm.control} name="compactMode" render={({ field }) => (
+                              <FormItem className="flex items-center gap-3">
+                                <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Mode kompak" />
+                                <div><p className="text-sm font-medium">Mode kompak</p><p className="text-[13px] text-muted-foreground">Mengurangi padding/spacing UI.</p></div>
+                              </FormItem>
+                            )} />
+                          </FieldGrid>
+                        </div>
+                      </div>
+                    </SectionShell>
+                  </form>
+                </Form>
               </TabsContent>
 
               <TabsContent value="operasional" className="mt-0">
@@ -345,6 +622,10 @@ export function SettingsPage() {
                           <FormItem><FormLabel>Expiry reservasi (menit)</FormLabel><FormControl><Input type="number" min={5} max={1440} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 30 : Math.floor(Number(e.target.value)))} /></FormControl><FormDescription>Dipakai oleh alur reservasi storefront/pembayaran yang sudah ada.</FormDescription><FormMessage /></FormItem>
                         )} />
                       </FieldGrid>
+                      <div className="space-y-3 border-t border-border/60 pt-4">
+                        <SwitchRow label="Auto-cancel pesanan belum bayar" checked={data?.operational.autoCancelUnpaidOrders || true} onChange={(v) => operationalForm.setValue("autoCancelUnpaidOrders", v)} disabled={readOnlyBusiness} description="Batalkan otomatis pesanan yang tidak dibayar setelah expiry." />
+                        <SwitchRow label="Izinkan split payment" checked={data?.operational.allowSplitPayment || true} onChange={(v) => operationalForm.setValue("allowSplitPayment", v)} disabled={readOnlyBusiness} description="Memungkinkan kombinasi metode pembayaran dalam satu transaksi." />
+                      </div>
                       <Form {...receiptForm}>
                         <div className="space-y-3 border-t border-border/60 pt-4">
                           <div className="flex items-center justify-between gap-3">
@@ -368,20 +649,21 @@ export function SettingsPage() {
                   <form onSubmit={paymentForm.handleSubmit((v) => onSave("payment", v, paymentForm))}>
                     <SectionShell title="Pembayaran" description="Metode pembayaran yang didukung dan konfigurasi transfer manual." actions={saveButton("payment", !paymentForm.formState.isDirty)}>
                       {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
-                      <div className="rounded-xl border border-border/70 p-4">
-                        <FormField control={paymentForm.control} name="qrManualTransferEnabled" render={({ field }) => (
-                          <FormItem className="flex items-center justify-between gap-4 space-y-0">
-                            <div><FormLabel>Transfer manual</FormLabel><FormDescription>Aktifkan instruksi transfer manual untuk alur storefront/pembayaran yang mendukungnya. Verifikasi tetap dilakukan staff secara server-side.</FormDescription></div>
-                            <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Aktifkan transfer manual" /></FormControl>
-                          </FormItem>
-                        )} />
+                      <div className="rounded-xl border border-border/70 p-4 space-y-3">
+                        <SwitchRow label="Tunai" checked={data?.payment.acceptCash || true} onChange={(v) => paymentForm.setValue("acceptCash", v)} disabled={readOnlyBusiness} description="Terima pembayaran tunai di POS." />
+                        <SwitchRow label="Kartu (EDC)" checked={data?.payment.acceptCard || false} onChange={(v) => paymentForm.setValue("acceptCard", v)} disabled={readOnlyBusiness} description="Terima pembayaran kartu via EDC." />
+                        <SwitchRow label="QRIS" checked={data?.payment.acceptQris || false} onChange={(v) => paymentForm.setValue("acceptQris", v)} disabled={readOnlyBusiness} description="Terima pembayaran QRIS." />
+                        <SwitchRow label="Transfer" checked={data?.payment.acceptTransfer || true} onChange={(v) => paymentForm.setValue("acceptTransfer", v)} disabled={readOnlyBusiness} description="Terima pembayaran transfer bank/e-wallet." />
                       </div>
-                      <FieldGrid>
-                        <FormField control={paymentForm.control} name="manualTransferBankName" render={({ field }) => (<FormItem><FormLabel>Nama bank/e-wallet</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="BCA / Mandiri / ..." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={paymentForm.control} name="manualTransferAccountName" render={({ field }) => (<FormItem><FormLabel>Nama pemilik</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="Nama rekening" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={paymentForm.control} name="manualTransferAccountNumber" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Nomor rekening/tujuan</FormLabel><FormControl><Input className="h-10 rounded-xl font-mono" placeholder="1234567890" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={paymentForm.control} name="manualTransferInstructions" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Instruksi tambahan</FormLabel><FormControl><Textarea rows={3} className="rounded-xl" placeholder="Contoh: transfer sesuai total, lalu unggah bukti." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      </FieldGrid>
+                      <div className="space-y-3 border-t border-border/60 pt-4">
+                        <SwitchRow label="Transfer manual" checked={data?.payment.qrManualTransferEnabled || false} onChange={(v) => paymentForm.setValue("qrManualTransferEnabled", v)} disabled={readOnlyBusiness} description="Aktifkan instruksi transfer manual untuk storefront. Verifikasi tetap staff." />
+                        <FieldGrid>
+                          <FormField control={paymentForm.control} name="manualTransferBankName" render={({ field }) => (<FormItem><FormLabel>Nama bank/e-wallet</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="BCA / Mandiri / ..." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferAccountName" render={({ field }) => (<FormItem><FormLabel>Nama pemilik</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="Nama rekening" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferAccountNumber" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Nomor rekening/tujuan</FormLabel><FormControl><Input className="h-10 rounded-xl font-mono" placeholder="1234567890" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferInstructions" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Instruksi tambahan</FormLabel><FormControl><Textarea rows={3} className="rounded-xl" placeholder="Contoh: transfer sesuai total, lalu unggah bukti." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        </FieldGrid>
+                      </div>
                       <Unavailable title="Payment gateway" description={`Status modul: ${data?.payment.paymentGatewayModuleStatus || "NOT_INSTALLED"}. Integrasi gateway tidak dibuat/diaktifkan otomatis dari halaman ini dan tidak mengubah riwayat transaksi historis.`} />
                     </SectionShell>
                   </form>
@@ -389,22 +671,66 @@ export function SettingsPage() {
               </TabsContent>
 
               <TabsContent value="sistem" className="mt-0">
-                <SectionShell title="Sistem" description="Informasi konfigurasi dan integrasi yang aman ditampilkan.">
-                  <div className="rounded-xl border border-border/70 px-4 py-1">
-                    <InfoRow label="Aplikasi" value="Niraya POS" />
-                    <InfoRow label="Framework" value="Next.js 16 / React 19" />
-                    <InfoRow label="Auth" value="Neon Auth" />
-                    <InfoRow label="Database" value="Neon Postgres / Drizzle" />
-                    <InfoRow label="Payment gateway" value={data?.payment.paymentGatewayModuleStatus === "INSTALLED" ? "Terinstal" : "Belum terinstal"} />
-                    <InfoRow label="Rahasia/credential" value={<span className="text-muted-foreground font-normal">Tidak ditampilkan</span>} />
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" className="h-9 rounded-xl" disabled={exporting} onClick={exportData}>
-                      {exporting ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <DownloadIcon className="size-4" aria-hidden />}Ekspor data (JSON)
-                    </Button>
-                  </div>
-                  <p className="text-[13px] text-muted-foreground">Ekspor menggunakan endpoint bisnis aktual (`/api/business`) sesuai akses sesi; tidak menampilkan secret environment.</p>
-                </SectionShell>
+                <Form {...systemForm}>
+                  <form onSubmit={systemForm.handleSubmit((v) => onSave("system", v, systemForm))}>
+                    <SectionShell title="Sistem" description="Konfigurasi level sistem dan maintenance." actions={saveButton("system", !systemForm.formState.isDirty)}>
+                      {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
+                      <div className="rounded-xl border border-border/70 p-4 space-y-3">
+                        <FieldGrid>
+                          <FormField control={systemForm.control} name="maintenanceMode" render={({ field }) => (
+                            <FormItem className="flex items-center gap-3">
+                              <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Maintenance mode" />
+                              <div><p className="text-sm font-medium">Maintenance mode</p><p className="text-[13px] text-muted-foreground">Blokir akses publik kecuali admin.</p></div>
+                            </FormItem>
+                          )} />
+                          <FormField control={systemForm.control} name="debugMode" render={({ field }) => (
+                            <FormItem className="flex items-center gap-3">
+                              <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Debug mode" />
+                              <div><p className="text-sm font-medium">Debug mode</p><p className="text-[13px] text-muted-foreground">Tampilkan error detail di client (hanya dev).</p></div>
+                            </FormItem>
+                          )} />
+                          <FormField control={systemForm.control} name="enableApiDocs" render={({ field }) => (
+                            <FormItem className="flex items-center gap-3">
+                              <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Enable API docs" />
+                              <div><p className="text-sm font-medium">API docs</p><p className="text-[13px] text-muted-foreground">Ekspos dokumentasi OpenAPI.</p></div>
+                            </FormItem>
+                          )} />
+                          <FormField control={systemForm.control} name="backupEnabled" render={({ field }) => (
+                            <FormItem className="flex items-center gap-3">
+                              <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Backup enabled" />
+                              <div><p className="text-sm font-medium">Backup otomatis</p><p className="text-[13px] text-muted-foreground">Aktifkan snapshot terjadwal Neon.</p></div>
+                            </FormItem>
+                          )} />
+                        </FieldGrid>
+                        <FormField control={systemForm.control} name="maintenanceMessage" render={({ field }) => (
+                          <FormItem><FormLabel>Pesan maintenance</FormLabel><FormControl><Textarea rows={2} className="rounded-xl" placeholder="Sistem sedang maintenance..." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FieldGrid>
+                          <FormField control={systemForm.control} name="apiRateLimit" render={({ field }) => (
+                            <FormItem><FormLabel>API rate limit (req/menit)</FormLabel><FormControl><Input type="number" min={10} max={10000} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 100 : Math.floor(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={systemForm.control} name="backupFrequency" render={({ field }) => (
+                            <FormItem><FormLabel>Frekuensi backup</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={readOnlyBusiness}><FormControl><SelectTrigger className="h-10 w-full rounded-xl"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="daily">Harian</SelectItem><SelectItem value="weekly">Mingguan</SelectItem><SelectItem value="monthly">Bulanan</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                          )} />
+                        </FieldGrid>
+                      </div>
+                      <div className="rounded-xl border border-border/70 px-4 py-1">
+                        <InfoRow label="Aplikasi" value="Niraya POS" />
+                        <InfoRow label="Framework" value="Next.js 16 / React 19" />
+                        <InfoRow label="Auth" value="Neon Auth" />
+                        <InfoRow label="Database" value="Neon Postgres / Drizzle" />
+                        <InfoRow label="Payment gateway" value={data?.payment.paymentGatewayModuleStatus === "INSTALLED" ? "Terinstal" : "Belum terinstal"} />
+                        <InfoRow label="Rahasia/credential" value={<span className="text-muted-foreground font-normal">Tidak ditampilkan</span>} />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" className="h-9 rounded-xl" disabled={exporting} onClick={exportData}>
+                          {exporting ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <DownloadIcon className="size-4" aria-hidden />}Ekspor data (JSON)
+                        </Button>
+                      </div>
+                      <p className="text-[13px] text-muted-foreground">Ekspor menggunakan endpoint bisnis aktual (`/api/business`) sesuai akses sesi; tidak menampilkan secret environment.</p>
+                    </SectionShell>
+                  </form>
+                </Form>
               </TabsContent>
             </>
           )}

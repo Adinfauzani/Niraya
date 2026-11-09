@@ -294,6 +294,7 @@ const NAV = [
   { href: "#menu", label: "Menu", id: "menu" },
   { href: "#tentang", label: "Tentang", id: "tentang" },
   { href: "#fitur", label: "Docs", id: "menu" },
+  { href: "/plans", label: "Plans", id: "plans" },
 ];
 
 function scrollToHash(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
@@ -365,19 +366,31 @@ export function LandingPage({ menuItems = [] }: { menuItems?: LandingMenuItem[] 
     return () => obs.disconnect();
   }, []);
 
-  const navLink = (item: (typeof NAV)[number]) => (
-    <a
-      key={item.label}
-      href={item.href}
-      onClick={(e) => scrollToHash(e, item.href)}
-      className={cn(
-        "rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-        active === item.id && "bg-accent/70 text-foreground font-medium",
-      )}
-    >
-      {item.label}
-    </a>
-  );
+  const navLink = (item: (typeof NAV)[number]) => {
+    const className = cn(
+      "rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+      active === item.id && "bg-accent/70 text-foreground font-medium",
+    );
+
+    if (!item.href.startsWith("#")) {
+      return (
+        <Link key={item.label} href={item.href} className={className}>
+          {item.label}
+        </Link>
+      );
+    }
+
+    return (
+      <a
+        key={item.label}
+        href={item.href}
+        onClick={(e) => scrollToHash(e, item.href)}
+        className={className}
+      >
+        {item.label}
+      </a>
+    );
+  };
 
   return (
     <div className="min-h-svh bg-background text-foreground pb-[calc(env(safe-area-inset-bottom)+6.5rem)] lg:pb-0">
@@ -584,6 +597,7 @@ export function LandingPage({ menuItems = [] }: { menuItems?: LandingMenuItem[] 
           <div className="flex flex-wrap items-center gap-3">
             <a href="#beranda" onClick={(e)=>scrollToHash(e,"#beranda")} className="hover:text-foreground">Beranda</a>
             <Link href="/menu" className="hover:text-foreground">Menu</Link>
+            <Link href="/plans" className="hover:text-foreground">Plans</Link>
             <Link href="/login" className="hover:text-foreground">Masuk</Link>
           </div>
         </div>

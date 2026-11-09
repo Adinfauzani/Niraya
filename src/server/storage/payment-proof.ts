@@ -66,10 +66,10 @@ export async function storePaymentProof(input: {
 export async function readPaymentProof(key: string): Promise<{ bytes: Buffer; contentType?: string } | null> {
   assertS3ConfiguredForProd();
   const normalized = path.normalize(key).replace(/^(\.\.(\/|\\|$))+/, "");
-  const full = path.resolve(ROOT, normalized);
-  if (!full.startsWith(path.resolve(ROOT) + path.sep)) return null;
+  const full = path.resolve(/* turbopackIgnore: true */ ROOT, normalized);
+  if (!full.startsWith(path.resolve(/* turbopackIgnore: true */ ROOT) + path.sep)) return null;
   try {
-    const bytes = await fs.readFile(full);
+    const bytes = await fs.readFile(full); /* turbopackIgnore: true */
     const ext = path.extname(full).slice(1).toLowerCase();
     const ct = [...ALLOWED.entries()].find(([, e]) => e === ext)?.[0];
     return { bytes, contentType: ct };

@@ -33,7 +33,7 @@ export async function GET() {
     const rows = await db
       .select({
         id: userProfiles.id,
-        userId: userProfiles.userId,
+        userId: userProfiles.id,
         name: userProfiles.name,
         email: userProfiles.email,
         role: userProfiles.role,
@@ -47,7 +47,7 @@ export async function GET() {
     return NextResponse.json({
       users: rows.map((r) => ({
         profileId: r.id,
-        userId: r.userId,
+        userId: r.id,
         name: r.name ?? "",
         email: r.email ?? "",
         role: (APP_ROLES.includes(r.role as AppRole) ? r.role : "user") as AppRole,
@@ -78,9 +78,9 @@ export async function PATCH(request: Request) {
 
     // prevent removing the last owner
     if (role !== "owner") {
-      const [target] = await db.select({ role: userProfiles.role }).from(userProfiles).where(and(eq(userProfiles.userId, userId), isNull(userProfiles.deletedAt))).limit(1);
+      const [target] = await db.select({ role: userProfiles.role }).from(userProfiles).where(and(eq(userProfiles.id, userId), isNull(userProfiles.deletedAt))).limit(1);
       if (target?.role === "owner") {
-        const owners = await db.select({ userId: userProfiles.userId }).from(userProfiles).where(and(eq(userProfiles.role, "owner"), isNull(userProfiles.deletedAt))).limit(2);
+        const owners = await db.select({ id: userProfiles.id }).from(userProfiles).where(and(eq(userProfiles.role, "owner"), isNull(userProfiles.deletedAt))).limit(2);
         if (owners.length <= 1) return NextResponse.json({ error: "Tidak dapat mengubah role owner terakhir." }, { status: 400 });
       }
     }
@@ -88,10 +88,10 @@ export async function PATCH(request: Request) {
     const [updated] = await db
       .update(userProfiles)
       .set({ role, updatedAt: new Date() })
-      .where(and(eq(userProfiles.userId, userId), isNull(userProfiles.deletedAt)))
-      .returning({ userId: userProfiles.userId, role: userProfiles.role, name: userProfiles.name, email: userProfiles.email, updatedAt: userProfiles.updatedAt });
+      .where(and(eq(userProfiles.id, userId), isNull(userProfiles.deletedAt)))
+      .returning({ id: userProfiles.id, role: userProfiles.role, name: userProfiles.name, email: userProfiles.email, updatedAt: userProfiles.updatedAt });
     if (!updated) return NextResponse.json({ error: "Pengguna tidak ditemukan." }, { status: 404 });
-    return NextResponse.json({ ok: true, user: { userId: updated.userId, role: updated.role, name: updated.name ?? "", email: updated.email ?? "", updatedAt: updated.updatedAt?.toISOString?.() ?? null } });
+    return NextResponse.json({ ok: true, user: { userId: updated.id, role: updated.role, name: updated.name ?? "", email: updated.email ?? "", updatedAt: updated.updatedAt?.toISOString?.() ?? null } });
   } catch (e: any) {
     console.error("Staff users PATCH error:", e);
     return NextResponse.json({ error: e?.message || "Gagal memperbarui role." }, { status: 500 });
@@ -109,15 +109,15 @@ export async function DELETE(request: Request) {
     const actorId = String(auth.user.id);
     if (userId === actorId) return NextResponse.json({ error: "Anda tidak dapat menghapus profil akun sendiri." }, { status: 400 });
 
-    const [target] = await db.select({ role: userProfiles.role }).from(userProfiles).where(and(eq(userProfiles.userId, userId), isNull(userProfiles.deletedAt))).limit(1);
+    const [target] = await db.select({ role: userProfiles.role }).from(userProfiles).where(and(eq(userProfiles.id, userId), isNull(userProfiles.deletedAt))).limit(1);
     if (!target) return NextResponse.json({ error: "Pengguna tidak ditemukan." }, { status: 404 });
     if (target.role === "owner") {
-      const owners = await db.select({ userId: userProfiles.userId }).from(userProfiles).where(and(eq(userProfiles.role, "owner"), isNull(userProfiles.deletedAt))).limit(2);
+      const owners = await db.select({ id: userProfiles.id }).from(userProfiles).where(and(eq(userProfiles.role, "owner"), isNull(userProfiles.deletedAt))).limit(2);
       if (owners.length <= 1) return NextResponse.json({ error: "Tidak dapat menghapus owner terakhir." }, { status: 400 });
     }
 
     // Delete app profile row only (Neon Auth account untouched). User can receive a fresh default profile on next login.
-    await db.delete(userProfiles).where(and(eq(userProfiles.userId, userId), isNull(userProfiles.deletedAt)));
+    await db.delete(userProfiles).where(and(eq(userProfiles.id, userId), isNull(userProfiles.deletedAt)));
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error("Staff users DELETE error:", e);

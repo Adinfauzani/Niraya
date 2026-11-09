@@ -8,6 +8,7 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
+  CreditCard,
   Grid3X3,
   HelpCircle,
   LayoutDashboard,
@@ -41,7 +42,7 @@ const NAV: NavGroup[] = [
   { key: "sales", title: "Sales", collapsible: true, defaultOpen: true, items: [{ href: "/pos", label: "POS Terminal", icon: ShoppingBag }, { href: "/transactions", label: "Transactions", icon: Receipt }, { href: "/customers", label: "Customers", icon: Users }] },
   { key: "catalog", title: "Catalog", collapsible: true, defaultOpen: true, items: [{ href: "/products", label: "Products", icon: Package }, { href: "/categories", label: "Categories", icon: Grid3X3 }, { href: "/inventory", label: "Inventory", icon: Boxes }] },
   { key: "business", title: "Business", collapsible: true, defaultOpen: true, items: [{ href: "/reports", label: "Reports", icon: BarChart3 }, { href: "/staff", label: "Staff Management", icon: UserCog }] },
-  { key: "preferences", title: "Preferences", collapsible: true, defaultOpen: true, items: [{ href: "/settings", label: "Settings", icon: Settings }, { href: "/help", label: "Help & Support", icon: HelpCircle }] },
+  { key: "preferences", title: "Preferences", collapsible: true, defaultOpen: true, items: [{ href: "/plans", label: "Plans & Billing", icon: CreditCard }, { href: "/settings", label: "Settings", icon: Settings }, { href: "/help", label: "Help & Support", icon: HelpCircle }] },
 ]
 
 const MIN_SIDEBAR_WIDTH = 200

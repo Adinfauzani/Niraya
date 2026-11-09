@@ -1,24 +1,9 @@
-import { auth } from "@/server/auth";
+import { updateSession } from "@/lib/supabase/middleware";
 
-export default auth.middleware({
-  loginUrl: "/login",
-  publicRoutes: [
-    "/",
-    "/login",
-    "/signup",
-    "/register",
-    "/menu",
-    "/menu/(.*)",
-    "/profile",
-    "/api/business",
-    "/api/demo/seed",
-    "/qr/(.*)", // legacy static QR links redirect to /menu (no token auth context)
-    "/api/public",
-    "/api/public/(.*)",
-    "/api/internal/jobs/(.*)",
-  ],
-});
+export default updateSession;
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };
