@@ -67,7 +67,20 @@ type BusinessState = {
   businessError: string | null
   ready: boolean
 
+  // Business/Store switcher
+  selectedBusinessId: string | null
+  selectedStoreId: string | null
+  availableBusinesses: Array<{
+    businessId: string
+    businessName: string
+    businessSlug: string
+    role: string
+    stores: Array<{ id: string; name: string; code: string; isActive: boolean }>
+  }>
+
   hydrate: () => Promise<void>
+  loadBusinesses: () => Promise<void>
+  switchBusiness: (businessId: string, storeId?: string) => Promise<void>
 
   addCategory: (input: CategoryInput) => Category
   updateCategory: (id: string, input: CategoryInput) => void
@@ -151,11 +164,94 @@ export const useBusinessStore = create<BusinessState>()((set, get) => ({
   businessError: null,
   ready: false,
 
+  // Business/Store switcher
+  selectedBusinessId: null,
+  selectedStoreId: null,
+  availableBusinesses: [],
+
   hydrate: async () => {
     // Real data is fetched once by BusinessDataProvider via TanStack Query and
     // written into this store. This store no longer performs its own database
     // fetch so there is a single data source for real sessions.
     return
+  },
+
+  loadBusinesses: async () => {
+    try {
+      const response = await fetch("/api/business/switcher", {
+        cache: "no-store",
+        credentials: "include",
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const businesses: Array<{
+          businessId: string
+          businessName: string
+          businessSlug: string
+          role: string
+          stores: Array<{ id: string; name: string; code: string; isActive: boolean }>
+        }> = data?.businesses ?? []
+        set((state) => {
+          let selectedBusinessId = state.selectedBusinessId
+          let selectedStoreId = state.selectedStoreId
+
+          // If no business selected yet, select the first one
+          if (!selectedBusinessId && businesses.length > 0) {
+            selectedBusinessId = businesses[0].businessId
+            selectedStoreId = businesses[0].stores[0]?.id ?? null
+          } else if (selectedBusinessId) {
+            // Verify selected business still exists
+            const business = businesses.find((b) => b.businessId === selectedBusinessId)
+            if (!business) {
+              selectedBusinessId = businesses[0]?.businessId ?? null
+              selectedStoreId = businesses[0]?.stores[0]?.id ?? null
+            } else if (selectedStoreId) {
+              // Verify selected store still exists
+              const store = business.stores.find((s) => s.id === selectedStoreId)
+              if (!store) {
+                selectedStoreId = business.stores[0]?.id ?? null
+              }
+            }
+          }
+
+          return {
+            availableBusinesses: businesses,
+            selectedBusinessId,
+            selectedStoreId,
+          }
+        })
+      }
+    } catch (error) {
+      console.error("Failed to load businesses:", error)
+    }
+  },
+
+  switchBusiness: async (businessId: string, storeId?: string) => {
+    const { availableBusinesses } = get()
+    const business = availableBusinesses.find((b) => b.businessId === businessId)
+    if (!business) return
+
+    const targetStoreId = storeId ?? business.stores[0]?.id ?? null
+
+    // Set cookies via API
+    try {
+      await fetch("/api/business/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ businessId, storeId: targetStoreId }),
+      })
+    } catch (error) {
+      console.error("Failed to set business cookie:", error)
+    }
+
+    set({
+      selectedBusinessId: businessId,
+      selectedStoreId: targetStoreId,
+    })
+
+    // Invalidate business data query to refetch with new context
+    queryClient.invalidateQueries({ queryKey: BUSINESS_QUERY_KEY })
   },
 
   addCategory: (input) => {

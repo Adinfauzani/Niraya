@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { db } from "@/server/db";
+import { businesses, stores } from "@/server/db/schema";
 import { getSession } from "@/lib/auth";
 import { getBusinessData, mutateBusiness } from "@/server/business/service";
 import {
@@ -10,7 +13,7 @@ import {
   ACTION_ROLES,
 } from "@/server/auth/session";
 import { createSeedData } from "@/lib/business-seed";
-import { getBusinessContext } from "@/server/auth/business-context";
+import { getBusinessContext, getActiveBusinessIds } from "@/server/auth/business-context";
 
 async function requireSession() {
   const cookieStore = await cookies();
@@ -35,12 +38,43 @@ async function requireBusinessContext() {
     return { businessId: "00000000-0000-0000-0000-000000000001", storeId: "00000000-0000-0000-0000-000000000002" };
   }
   
+  // Check for selected business/store cookies
+  const selectedBusinessId = cookieStore.get("niraya_selected_business")?.value;
+  const selectedStoreId = cookieStore.get("niraya_selected_store")?.value;
+  
   const session = await getSession();
   const user =
     (session as any)?.user ?? (session as any)?.data?.user ?? null;
 
   if (!user?.id) {
     throw new Error("Unauthorized");
+  }
+
+  // If user has selected a specific business, verify they have access to it
+  if (selectedBusinessId) {
+    const memberships = await getActiveBusinessIds(user.id);
+    if (memberships.includes(selectedBusinessId)) {
+      // Verify store belongs to business if store is specified
+      let storeId = selectedStoreId;
+      if (storeId) {
+        const store = await db.query.stores.findFirst({
+          where: and(eq(stores.id, storeId), eq(stores.businessId, selectedBusinessId), eq(stores.isActive, true)),
+          columns: { id: true },
+        });
+        if (!store) {
+          storeId = undefined;
+        }
+      }
+      if (!storeId) {
+        // Get first active store for the business
+        const store = await db.query.stores.findFirst({
+          where: and(eq(stores.businessId, selectedBusinessId), eq(stores.isActive, true)),
+          columns: { id: true },
+        });
+        storeId = store?.id ?? "00000000-0000-0000-0000-000000000002";
+      }
+      return { businessId: selectedBusinessId, storeId };
+    }
   }
 
   const context = await getBusinessContext(user.id);

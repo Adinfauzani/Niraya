@@ -41,6 +41,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [resizing, setResizing] = useState(false)
   const hydrate = useBusinessStore((state) => state.hydrate)
+  const loadBusinesses = useBusinessStore((state) => state.loadBusinesses)
   const ready = useBusinessStore((state) => state.ready)
   const businessError = useBusinessStore((state) => state.businessError)
   const realUser = useRealUser(true)
@@ -51,7 +52,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isRegularUser && isProfileRoute) return
     void hydrate()
-  }, [hydrate, isRegularUser, isProfileRoute])
+    void loadBusinesses()
+  }, [hydrate, loadBusinesses, isRegularUser, isProfileRoute])
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY))

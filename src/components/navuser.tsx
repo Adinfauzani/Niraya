@@ -1,7 +1,9 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import {
+  Building2,
   CreditCardIcon,
   EllipsisVerticalIcon,
   HelpCircleIcon,
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { supabaseClient } from "@/lib/auth-client"
+import { useBusinessStore } from "@/stores/business-store"
 import { cn } from "@/lib/utils"
 
 function initials(name: string) {
@@ -50,6 +53,23 @@ export function NavUser({
   const isMobile = useIsMobile()
   const fallback = initials(user.name)
 
+  const {
+    availableBusinesses,
+    selectedBusinessId,
+    selectedStoreId,
+    loadBusinesses,
+    switchBusiness,
+  } = useBusinessStore()
+
+  const [businessesLoaded, setBusinessesLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!businessesLoaded) {
+      loadBusinesses()
+      setBusinessesLoaded(true)
+    }
+  }, [loadBusinesses, businessesLoaded])
+
   const handleSignOut = async () => {
     try {
       await supabaseClient.auth.signOut()
@@ -76,6 +96,33 @@ export function NavUser({
     </Avatar>
   )
 
+  const businessSwitcher = availableBusinesses.length > 1 ? (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel className="px-1 py-1.5 text-xs font-semibold text-muted-foreground uppercase">
+        Bisnis & Toko
+      </DropdownMenuLabel>
+      {availableBusinesses.map((business) => (
+        <DropdownMenuItem
+          key={business.businessId}
+          onSelect={() => switchBusiness(business.businessId)}
+          className={
+            selectedBusinessId === business.businessId
+              ? "bg-primary/10 text-primary"
+              : undefined
+          }
+        >
+          <Building2 className="mr-2 size-4" />
+          <div className="flex flex-col">
+            <span className="truncate font-medium">{business.businessName}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {business.stores.map((s) => s.name).join(", ")}
+            </span>
+          </div>
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuGroup>
+  ) : null
+
   const menu = (
     <DropdownMenuContent
       className="min-w-56 rounded-lg"
@@ -95,6 +142,8 @@ export function NavUser({
         </div>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
+      {businessSwitcher}
+      {businessSwitcher && <DropdownMenuSeparator />}
       <DropdownMenuGroup>
         <DropdownMenuItem onSelect={() => router.push("/profile")}>
           <UserCircleIcon />
@@ -102,7 +151,7 @@ export function NavUser({
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => router.push("/plans")}>
           <CreditCardIcon />
-          Plans &amp; Billing
+          Plans & Billing
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => router.push("/settings")}>
           <SettingsIcon />
@@ -110,7 +159,7 @@ export function NavUser({
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => router.push("/help")}>
           <HelpCircleIcon />
-          Help &amp; Support
+          Help & Support
         </DropdownMenuItem>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />

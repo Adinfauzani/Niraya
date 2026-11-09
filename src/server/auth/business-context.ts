@@ -129,3 +129,57 @@ export async function getBusinessBySlug(slug: string): Promise<{ id: string } | 
   });
   return business ? { id: business.id } : null;
 }
+
+export async function getUserBusinessesWithStores(userId: string): Promise<
+  Array<{
+    businessId: string;
+    businessName: string;
+    businessSlug: string;
+    role: string;
+    stores: Array<{ id: string; name: string; code: string; isActive: boolean }>;
+  }>
+> {
+  const memberships = await db.query.businessMembers.findMany({
+    where: and(
+      eq(businessMembers.userId, userId),
+      eq(businessMembers.status, "active")
+    ),
+  });
+
+  const businessIds = memberships.map((m) => m.businessId);
+  if (businessIds.length === 0) return [];
+
+  const activeBusinesses = await db.query.businesses.findMany({
+    where: and(inArray(businesses.id, businessIds), eq(businesses.status, "active")),
+    columns: { id: true, name: true, slug: true },
+  });
+
+  const businessMap = new Map(activeBusinesses.map((b) => [b.id, b]));
+  const result: Array<{
+    businessId: string;
+    businessName: string;
+    businessSlug: string;
+    role: string;
+    stores: Array<{ id: string; name: string; code: string; isActive: boolean }>;
+  }> = [];
+
+  for (const membership of memberships) {
+    const business = businessMap.get(membership.businessId);
+    if (!business) continue;
+
+    const userStores = await db.query.stores.findMany({
+      where: and(eq(stores.businessId, membership.businessId), eq(stores.isActive, true)),
+      columns: { id: true, name: true, code: true, isActive: true },
+    });
+
+    result.push({
+      businessId: membership.businessId,
+      businessName: business.name,
+      businessSlug: business.slug,
+      role: membership.role,
+      stores: userStores,
+    });
+  }
+
+  return result;
+}
