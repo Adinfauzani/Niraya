@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRightIcon, CalendarIcon, LayoutDashboardIcon, LogOutIcon, MailIcon, ReceiptTextIcon, ShieldCheckIcon, UserIcon } from "lucide-react"
+import { ArrowRightIcon, CalendarIcon, LayoutDashboardIcon, LogOutIcon, MailIcon, ReceiptTextIcon, ShieldCheckIcon, UserIcon, PhoneIcon, ImageIcon, SaveIcon, Edit2Icon, XIcon, Loader2Icon } from "lucide-react"
 
 import { useRealUser } from "@/hooks/use-real-user"
 import { appRoleLabel } from "@/lib/business-labels"
@@ -16,6 +16,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
 
 type ActivityItem = {
   kind: "order" | "transaction"
@@ -49,6 +54,11 @@ export function ProfilePage() {
   const realUser = useRealUser(true) as any
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityError, setActivityError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [editName, setEditName] = useState(realUser?.name || "")
+  const [editPhone, setEditPhone] = useState(realUser?.phone || "")
+  const [editAvatarUrl, setEditAvatarUrl] = useState(realUser?.avatarUrl || "")
 
   const role = realUser?.role
   const isRegularUser = !role || role === "user"
@@ -73,8 +83,41 @@ export function ProfilePage() {
     return () => { active = false }
   }, [realUser?.id, realUser])
 
+  // Sync edit fields when realUser changes
+  useEffect(() => {
+    if (realUser) {
+      setEditName(realUser.name || "")
+      setEditPhone(realUser.phone || "")
+      setEditAvatarUrl(realUser.avatarUrl || "")
+    }
+  }, [realUser])
+
   const handleSignOut = async () => {
     try { await supabaseClient.auth.signOut() } finally { router.replace("/login"); router.refresh() }
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim() || null,
+          phone: editPhone.trim() || null,
+          avatarUrl: editAvatarUrl.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan")
+      toast.success("Profil diperbarui")
+      setIsEditing(false)
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menyimpan profil")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const summary = useMemo(() => {
@@ -84,6 +127,8 @@ export function ProfilePage() {
   }, [activity])
 
   const loadingUser = realUser === null && activity === null
+
+  const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
 
   return (
     <div className="min-h-svh bg-[linear-gradient(180deg,color-mix(in_oklab,var(--muted)_24%,transparent),transparent_220px)] pb-[calc(env(safe-area-inset-bottom)+5.75rem)] dark:bg-background lg:pb-10">
@@ -106,12 +151,75 @@ export function ProfilePage() {
         <div className="mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <Card className="h-fit overflow-hidden rounded-2xl border-border/70 shadow-none">
             <CardHeader className="items-center border-b border-border/60 bg-card/50 pb-5 text-center">
-              <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted/40 text-xl font-semibold">
-                {realUser?.image ? <img src={realUser.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : initials(realUser?.name || "Akun")}
+              <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted/40 text-xl font-semibold relative">
+                {isEditing ? (
+                  <>
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={editAvatarUrl || undefined} alt="Avatar" />
+                      <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                        {editName ? getInitials(editName) : "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute bottom-0 right-0 -translate-y-1/2 -translate-x-1/2 bg-background"
+                      onClick={() => setEditAvatarUrl("")}
+                      disabled={isSaving}
+                    >
+                      <XIcon className="h-4 w-4 text-destructive" />
+                      <span className="sr-only">Hapus avatar</span>
+                    </Button>
+                  </>
+                ) : (
+                  realUser?.image ? <img src={realUser.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : initials(realUser?.name || "Akun")
+                )}
               </div>
               <div className="min-w-0 pt-1">
-                <CardTitle className="truncate text-lg">{realUser?.name || (loadingUser ? "Memuat..." : "Akun terdaftar")}</CardTitle>
-                <CardDescription className="truncate">{realUser?.email || "-"}</CardDescription>
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Nama lengkap"
+                      className="text-center text-lg font-semibold"
+                      disabled={isSaving}
+                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-phone" className="text-xs text-muted-foreground">Telepon</Label>
+                      <div className="relative">
+                        <PhoneIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="profile-phone"
+                          value={editPhone}
+                          onChange={(e) => setEditPhone(e.target.value)}
+                          placeholder="0812-3456-7890"
+                          className="pl-10 text-center text-sm"
+                          disabled={isSaving}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profile-avatar" className="text-xs text-muted-foreground">Avatar URL</Label>
+                      <div className="relative">
+                        <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="profile-avatar"
+                          value={editAvatarUrl}
+                          onChange={(e) => setEditAvatarUrl(e.target.value)}
+                          placeholder="https://example.com/avatar.png"
+                          className="pl-10 text-center text-sm"
+                          disabled={isSaving}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <CardTitle className="truncate text-lg">{realUser?.name || (loadingUser ? "Memuat..." : "Akun terdaftar")}</CardTitle>
+                    <CardDescription className="truncate">{realUser?.email || "-"}</CardDescription>
+                  </>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-2 p-3">
@@ -120,20 +228,50 @@ export function ProfilePage() {
                 <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[11px] text-muted-foreground">Selesai/terbayar</p><p className="mt-0.5 text-lg font-semibold tabular-nums">{activity ? summary.completed : "—"}</p></div>
               </div>
               {canAccessDashboard ? <Button asChild variant="outline" className="w-full justify-between rounded-xl sm:hidden"><Link href="/dashboard">Buka dashboard <ArrowRightIcon className="size-4" aria-hidden /></Link></Button> : null}
-              <Button variant="ghost" className="w-full justify-start rounded-xl text-muted-foreground hover:text-destructive" onClick={handleSignOut}><LogOutIcon className="size-4" aria-hidden />Keluar</Button>
+              {isEditing ? (
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                    <XIcon className="w-4 h-4 mr-2" />
+                    Batal
+                  </Button>
+                  <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <SaveIcon className="w-4 h-4 mr-2" />
+                        Simpan
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" className="w-full justify-center" onClick={() => setIsEditing(true)}>
+                  <Edit2Icon className="w-4 h-4 mr-2" />
+                  Edit Profil
+                </Button>
+              )}
+              <Button variant="ghost" className="w-full justify-start rounded-xl text-muted-foreground hover:text-destructive" onClick={handleSignOut} disabled={isEditing}><LogOutIcon className="size-4" aria-hidden />Keluar</Button>
             </CardContent>
           </Card>
 
           <div className="space-y-4">
             <Card className="rounded-2xl border-border/70 shadow-none">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Informasi akun</CardTitle>
-                <CardDescription>Data akun terhubung ke autentikasi Niraya.</CardDescription>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Informasi akun</CardTitle>
+                  <CardDescription>Data akun terhubung ke autentikasi Niraya.</CardDescription>
+                </div>
+                {!isEditing && <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}><Edit2Icon className="h-4 w-4" /></Button>}
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
                 {[
-                  { icon: UserIcon, label: "Nama", value: realUser?.name || "-" },
+                  { icon: UserIcon, label: "Nama", value: isEditing ? editName : (realUser?.name || "-") },
                   { icon: MailIcon, label: "Email", value: realUser?.email || "-" },
+                  { icon: PhoneIcon, label: "Telepon", value: isEditing ? editPhone : (realUser?.phone || "-") },
                   { icon: ShieldCheckIcon, label: "Peran", value: displayRole },
                   { icon: CalendarIcon, label: "Terdaftar", value: realUser?.createdAt ? formatDate(realUser.createdAt) : "Aktif" },
                 ].map((item) => {

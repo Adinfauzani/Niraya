@@ -1,4 +1,4 @@
-export type BillingTier = "starter" | "plus" | "pro"
+export type BillingTier = "free" | "starter" | "plus" | "pro"
 
 export type BillingRecurrence =
   | "monthly"
@@ -45,6 +45,40 @@ export type PlanDefinition = {
 }
 
 export const PLAN_DEFINITIONS = [
+  {
+    id: "free",
+    code: "free",
+    name: "Free",
+    tier: "free",
+    recurrence: "monthly",
+    intervalMonths: 1,
+    priceCents: 0,
+    currency: "IDR",
+    tagline: "Start exploring Niraya.",
+    description: "Free tier for individuals trying out the platform.",
+    billingSuffix: "/ month",
+    billingLabel: "Free forever",
+    monthlyEquivalentCents: 0,
+    gumroadProductId: "",
+    gumroadPermalink: "",
+    entitlements: {
+      maxUsers: 1,
+      maxStores: 1,
+      maxProducts: 50,
+      features: ["pos_basic"],
+    },
+    features: [
+      "1 store",
+      "1 team member (you)",
+      "Up to 50 products",
+      "Basic POS checkout",
+      "Basic inventory tracking",
+      "Public storefront",
+      "Community support",
+    ],
+    ctaLabel: "Get Started Free",
+    highlighted: false,
+  },
   {
     id: "starter-monthly",
     code: "starter-monthly",

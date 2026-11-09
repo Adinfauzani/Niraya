@@ -158,6 +158,8 @@ export const userProfiles = core.table(
     id: uuid("Id").primaryKey(),
     name: text("Name"),
     email: text("Email"),
+    phone: text("Phone"),
+    avatarUrl: text("AvatarUrl"),
     role: text("Role")
       .notNull()
       .default("user")
@@ -173,6 +175,7 @@ export const userProfiles = core.table(
   (t) => [
     index("UserProfiles_Role_idx").on(t.role),
     index("UserProfiles_Email_idx").on(t.email),
+    index("UserProfiles_Phone_idx").on(t.phone),
   ]
 );
 

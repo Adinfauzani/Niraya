@@ -3,8 +3,8 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/server/db";
 import { businessMembers } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
-import { DashboardLayout } from "@/components/layout/dashboard-layout";
-import { OnboardingDialog } from "@/features/onboarding/onboarding-dialog";
+import { OnboardingLayout } from "@/components/onboarding/onboarding-layout";
+import { OnboardingWizard } from "@/features/onboarding/onboarding-wizard";
 
 export default async function DashboardOnboardingPage() {
   const session = await getSession();
@@ -28,8 +28,8 @@ export default async function DashboardOnboardingPage() {
   }
 
   return (
-    <DashboardLayout>
-      <OnboardingDialog />
-    </DashboardLayout>
+    <OnboardingLayout currentStep={1} totalSteps={7}>
+      <OnboardingWizard />
+    </OnboardingLayout>
   );
 }

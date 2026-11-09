@@ -28,7 +28,13 @@ async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitl
   });
 
   if (!subscription) {
-    return null;
+    // Return free tier entitlements when no active subscription
+    return {
+      maxUsers: 1,
+      maxStores: 1,
+      maxProducts: 50,
+      features: ["pos_basic"],
+    };
   }
 
   const plan = await db.query.plans.findFirst({
