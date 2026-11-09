@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { db } from "@/server/db";
-import { userProfiles, businessMembers } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { checkInitializationStatus } from "@/server/auth/initialization";
 
 export async function GET() {
   const session = await getSession();
@@ -13,24 +11,19 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const profile = await db.query.userProfiles.findFirst({
-    where: eq(userProfiles.id, String(sessionUser.id)),
-  });
+  const userId = String(sessionUser.id);
 
-  const membership = await db.query.businessMembers.findFirst({
-    where: and(
-      eq(businessMembers.userId, String(sessionUser.id)),
-      eq(businessMembers.role, "owner"),
-      eq(businessMembers.status, "active")
-    ),
-  });
+  try {
+    const status = await checkInitializationStatus(userId);
 
-  const needsOnboarding = !membership;
-
-  return NextResponse.json({
-    needsOnboarding,
-    hasProfile: !!profile,
-    profileRole: profile?.role ?? null,
-    isOwner: !!membership,
-  });
+    return NextResponse.json({
+      needsOnboarding: !status.isInitialized,
+      isInitialized: status.isInitialized,
+      businessId: status.businessId,
+      storeId: status.storeId,
+    });
+  } catch (error) {
+    console.error("Onboarding status error:", error);
+    return NextResponse.json({ error: "Gagal memeriksa status" }, { status: 500 });
+  }
 }

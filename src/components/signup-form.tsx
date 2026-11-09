@@ -91,9 +91,10 @@ export function SignupForm({
         return
       }
 
-      // Email confirmation required - redirect to check email page
-      sessionStorage.setItem("pending_email", values.email)
-      router.push("/verify")
+      // Email confirmation required - show success message
+      toast.success("Pendaftaran berhasil!", {
+        description: "Silakan cek email Anda untuk verifikasi akun.",
+      })
       router.refresh()
     } catch (error) {
       setFormError(
