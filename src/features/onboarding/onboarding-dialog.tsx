@@ -731,7 +731,7 @@ export function OnboardingDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent 
-        className="max-w-[90vw] md:max-w-[80vw] lg:max-w-[75vw] max-h-[95vh] overflow-hidden"
+        className="max-w-[90vw] md:max-w-[80vw] lg:max-w-[75vw] max-h-[95vh] overflow-hidden flex flex-col"
         showCloseButton={false}
       >
         {/* Custom close button */}
@@ -748,7 +748,7 @@ export function OnboardingDialog() {
         </DialogClose>
 
         {/* Progress bar */}
-        <div className="mb-4 h-1 bg-muted rounded-full overflow-hidden">
+        <div className="mb-4 h-1 bg-muted rounded-full overflow-hidden flex-shrink-0">
           <div
             className="h-full bg-primary transition-all duration-500 ease-out"
             style={{ width: `${progress}%` }}
@@ -756,7 +756,7 @@ export function OnboardingDialog() {
         </div>
 
         {/* Step indicator */}
-        <nav className="mb-6" aria-label="Onboarding progress">
+        <nav className="mb-6 flex-shrink-0" aria-label="Onboarding progress">
           <ol className="flex items-center justify-center gap-1" role="list">
             {STEPS.map((step, index) => (
               <li key={step.id} className="flex items-center">
@@ -790,7 +790,7 @@ export function OnboardingDialog() {
         </nav>
 
         {/* Header */}
-        <DialogHeader className="text-center mb-4">
+        <DialogHeader className="text-center mb-4 flex-shrink-0">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
             <Building2Icon className="h-6 w-6 text-primary" />
           </div>
@@ -801,7 +801,7 @@ export function OnboardingDialog() {
         </DialogHeader>
 
         {/* Content - scrollable */}
-        <div className="max-h-[70vh] overflow-y-auto pr-2 pb-4">
+        <div className="flex-1 overflow-y-auto pr-2 pb-4">
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground text-center">
               Langkah {currentStep} dari {STEPS.length}: {STEPS[currentStep - 1].title}
@@ -810,8 +810,8 @@ export function OnboardingDialog() {
           </div>
         </div>
 
-        {/* Footer */}
-        <DialogFooter className="border-t pt-4">
+        {/* Footer - sticky at bottom */}
+        <DialogFooter className="border-t pt-4 flex-shrink-0">
           <div className="flex justify-between w-full">
             <Button
               variant="outline"
