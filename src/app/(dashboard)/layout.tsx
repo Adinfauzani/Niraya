@@ -23,32 +23,50 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setCheckingOnboarding(false)
       return
     }
+    let cancelled = false
     const checkOnboarding = async () => {
       try {
         const res = await fetch("/api/onboarding/status")
         if (res.ok) {
           const data = await res.json()
-          if (data.needsOnboarding) {
-            setShowOnboarding(true)
-            setOnboardingDone(false)
-          } else {
-            setOnboardingDone(true)
-            setShowOnboarding(false)
+          if (!cancelled) {
+            if (data.needsOnboarding) {
+              setShowOnboarding(true)
+              setOnboardingDone(false)
+            } else {
+              setOnboardingDone(true)
+              setShowOnboarding(false)
+            }
           }
         }
       } catch {
         // Silently fail - let middleware handle auth
       } finally {
-        setCheckingOnboarding(false)
+        if (!cancelled) {
+          setCheckingOnboarding(false)
+        }
       }
     }
     checkOnboarding()
+    return () => { cancelled = true }
   }, [role, pathname])
 
-  // Only redirect to /profile AFTER onboarding check is done
+  // Only redirect to /profile AFTER onboarding check is done AND onboarding is complete
   useEffect(() => {
-    if (!role || checkingOnboarding || showOnboarding || pathname === "/profile" || pathname.startsWith("/onboarding")) return
-    if (onboardingDone && role === "user") {
+    // Wait for onboarding check to complete
+    if (checkingOnboarding) return
+    
+    // Don't redirect if onboarding modal is showing
+    if (showOnboarding) return
+    
+    // Don't redirect if onboarding not done yet
+    if (!onboardingDone) return
+    
+    // Don't redirect if already on profile or onboarding page
+    if (pathname === "/profile" || pathname.startsWith("/onboarding")) return
+    
+    // Only redirect if role is "user" (no business role assigned)
+    if (role === "user") {
       router.replace("/profile")
     }
   }, [role, pathname, router, checkingOnboarding, showOnboarding, onboardingDone])
