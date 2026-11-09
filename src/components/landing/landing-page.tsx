@@ -489,34 +489,47 @@ export function LandingPage() {
         <>
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-4xl animate-in slide-in-from-bottom-2" role="dialog" aria-label="Cookie consent">
             <div className="w-full bg-[#202022] border border-[#2e2e32] rounded-full p-2.5 sm:p-3 flex items-center justify-between shadow-2xl backdrop-blur-md gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowCookieSettings(true)}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full text-[#8e8e93] hover:text-white hover:bg-[#2c2c30] transition-colors"
-                aria-label="Cookie Preferences"
-              >
-                <Settings2 className="size-5" />
-              </Button>
+              {/* Left: Cookie Icon & Description */}
+              <div className="flex items-center gap-3.5 sm:gap-4 overflow-hidden pl-1">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#141416]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21.598 11.064a1.006 1.006 0 0 0-.854-.172A3.994 3.994 0 0 1 15.6 5.753a1.002 1.002 0 0 0-.792-.958 9.99 9.99 0 0 0-2.808-.4 10 10 0 1 0 10 10c0-.82-.098-1.618-.28-2.383a1 1 0 0 0-.122-.948zM8.5 7.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm-2 7a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm5.5 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm2-6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 3a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z" />
+                  </svg>
+                </div>
+                <p className="text-[#d1d1d6] text-xs sm:text-sm font-normal leading-relaxed line-clamp-2 sm:line-clamp-none">
+                  We use cookies to enhance your browsing experience, personalize content, and analyze our traffic.
+                </p>
+              </div>
 
-              {/* Reject Button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={declineCookies}
-                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium text-[#c7c7cc] bg-[#2a2a2e]/60 hover:bg-[#323238] border border-transparent hover:border-[#3e3e44] transition-all"
-              >
-                Reject
-              </Button>
+              {/* Right: Settings, Reject & Accept */}
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0 pr-1">
+                <button
+                  type="button"
+                  aria-label="Cookie Preferences"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-[#8e8e93] hover:text-white hover:bg-[#2c2c30] transition-colors"
+                  onClick={() => setShowCookieSettings(true)}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+                  </svg>
+                </button>
 
-              {/* Accept Button */}
-              <Button
-                size="sm"
-                onClick={acceptCookies}
-                className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-white bg-[#f95721] hover:bg-[#ff6938] shadow-lg shadow-[#f95721]/20 active:scale-95 transition-all"
-              >
-                Accept
-              </Button>
+                <button
+                  type="button"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium text-[#c7c7cc] bg-[#2a2a2e]/60 hover:bg-[#323238] border border-transparent hover:border-[#3e3e44] transition-all"
+                  onClick={declineCookies}
+                >
+                  Reject
+                </button>
+
+                <button
+                  type="button"
+                  className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                  onClick={acceptCookies}
+                >
+                  Accept
+                </button>
+              </div>
             </div>
           </div>
 
