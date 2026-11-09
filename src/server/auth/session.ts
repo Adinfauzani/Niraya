@@ -5,15 +5,17 @@ import { userProfiles, roles } from "@/server/db/schema";
 import { getSession } from "@/lib/auth";
 
 /**
- * Role aplikasi. `user` adalah role dasar untuk setiap akun yang login,
+ * Role aplikasi. `free` adalah role untuk akun tanpa langganan (free tier).
+ * `user` adalah role dasar untuk setiap akun yang login,
  * sedangkan role lain adalah role operasional yang diberikan secara eksplisit.
  */
-export type UserRole = "user" | "owner" | "admin" | "manager" | "cashier";
+export type UserRole = "free" | "user" | "owner" | "admin" | "manager" | "cashier";
 
 /** Role bawaan untuk akun yang baru login / belum punya profil. */
 export const DEFAULT_ROLE: UserRole = "user";
 
 const ROLE_RANK: Record<UserRole, number> = {
+  free: 0,
   user: 0,
   cashier: 1,
   manager: 2,

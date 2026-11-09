@@ -52,6 +52,21 @@ CREATE TABLE "core"."Roles" (
 );
 CREATE INDEX "Roles_Rank_idx" ON "core"."Roles" ("Rank");
 
+-- Insert system roles (idempotent)
+INSERT INTO "core"."Roles" ("Code", "Name", "Description", "Rank", "IsSystem") VALUES
+    ('free', 'Free', 'Free tier - limited features', 0, true),
+    ('user', 'User', 'Akun dasar', 0, true),
+    ('cashier', 'Cashier', 'Kasir', 1, true),
+    ('manager', 'Manager', 'Manajer', 2, true),
+    ('admin', 'Admin', 'Administrator', 3, true),
+    ('owner', 'Owner', 'Pemilik bisnis', 4, true)
+ON CONFLICT ("Code") DO UPDATE SET
+    "Name" = EXCLUDED."Name",
+    "Description" = EXCLUDED."Description",
+    "Rank" = EXCLUDED."Rank",
+    "IsSystem" = EXCLUDED."IsSystem",
+    "UpdatedAt" = now();
+
 -- Permissions: granular permissions for RBAC
 CREATE TABLE "core"."Permissions" (
     "Code" text PRIMARY KEY NOT NULL,

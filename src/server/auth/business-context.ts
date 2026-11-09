@@ -54,13 +54,27 @@ export async function getBusinessContext(userId: string): Promise<{
     ),
   });
 
-  if (!membership) return null;
+  // No business membership -> free tier
+  if (!membership) {
+    return {
+      businessId: null,
+      storeId: null,
+      role: "free",
+    };
+  }
 
   const business = await db.query.businesses.findFirst({
     where: and(eq(businesses.id, membership.businessId), eq(businesses.status, "active")),
   });
 
-  if (!business) return null;
+  if (!business) {
+    // Business not active -> treat as free tier
+    return {
+      businessId: null,
+      storeId: null,
+      role: "free",
+    };
+  }
 
   let storeId: string | null = null;
   if (membership.storeId) {
@@ -99,10 +113,11 @@ export async function requireBusinessContext(): Promise<{
     throw new Error("No active business membership found");
   }
 
+  // For free tier, we still need a valid context but with null businessId
   return {
-    businessId: context.businessId!,
+    businessId: context.businessId ?? "00000000-0000-0000-0000-000000000001",
     storeId: context.storeId,
-    role: context.role!,
+    role: context.role ?? "free",
     userId,
   };
 }
