@@ -1,196 +1,263 @@
 <!--
-Cara pakai: copy seluruh isi file ini ke ChatGPT yang sudah terhubung ke Gumroad MCP.
-Semua copy produk di bawah sudah dalam bahasa Inggris.
-Jangan publish sebelum Riu setuju.
+Cara pakai: copy seluruh isi file ini ke ChatGPT untuk konteks lengkap sistem Niraya POS.
+File ini mendokumentasikan arsitektur, fitur, dan alur implementasi terkini.
 -->
 
-# Prompt for ChatGPT — Create Niraya Membership Products on Gumroad
+# Niraya POS — System Documentation for ChatGPT
 
-## Your role
+## Project Overview
 
-You are operating the **Rynex Studio** Gumroad account through the Gumroad MCP integration.
+**Niraya** is a self-hosted retail operating system: POS, inventory, customers, staff, reports, and public storefront. Built for Indonesian market (warung, kafe, toko).
 
-Your job is to create **three separate membership products** for **Niraya** as **drafts**. Do not publish anything. Do not modify or delete existing products.
+**Stack:**
+- Next.js 16 App Router, React 19, TypeScript strict
+- Bun package manager
+- Tailwind CSS v4 + shadcn/ui
+- Drizzle ORM + PostgreSQL (Supabase)
+- Supabase Auth (email/password, Google OAuth, Apple OAuth coming soon)
+- TanStack Query + Zustand for state
+- Gumroad for billing (3 membership tiers)
 
-## Context
+---
 
-- **Niraya** is a retail operating system: POS, inventory, customers, staff, reports, and a public storefront.
-- Billing is handled by **Gumroad**.
-- We use **Cara A**: three separate products, one recurrence each.
-- Do **not** create one tiered product with three recurrences.
-- All customer-facing copy must be in **English**.
-- Currency: **IDR**.
-- Prices are final:
-  - **Starter**: Rp130,000 per month
-  - **Plus**: Rp780,000 every 6 months
-  - **Pro**: Rp1,560,000 per year
+## Database Schema (13 domains)
 
-## Hard rules
+Located in `drizzle/schema/` — source of truth:
 
-1. Create exactly **3 new products**.
-2. Product type must be **membership / recurring subscription**.
-3. Each product must have **exactly one recurrence**:
-   - Starter: **monthly**
-   - Plus: **every 6 months (biannually)**
-   - Pro: **yearly**
-4. Do **not** create additional tiers. If Gumroad requires a tier, use the product name as the single tier.
-5. Create each product as a **draft / unpublished**. Do **not** publish.
-6. Do **not** change existing products, prices, or account settings.
-7. There is an older product named **Niraya** (permalink `ulqvnw`). Do **not** edit, rename, unpublish, or delete it. Leave it untouched.
-8. If a product with the same name as one of the three new products already exists, stop and report it. Do not duplicate it.
-9. If the MCP cannot set recurrence, price, or product type, stop and report the exact missing field. Do not guess or use a workaround.
-10. Return the raw product IDs exactly as Gumroad provides them, including any `=` characters.
-11. Ask for explicit approval before publishing.
-12. Do not configure Ping, webhooks, or resource subscriptions in this task. That is handled separately.
+| Schema | Tables | Description |
+|--------|--------|-------------|
+| `core` | UserProfiles, BusinessMembers, BusinessCategories | Users, RBAC, business membership |
+| `products` | Categories, Products, ProductImages | Catalog, variants, pricing |
+| `inventory` | Inventory, StockAdjustments, StockMovements, Reservations | Multi-store stock, reservations for QR ordering |
+| `customers` | Customers, CustomerAddresses | CRM |
+| `staff` | Staff, StaffSessions | Team management |
+| `suppliers` | Suppliers, PurchaseOrders, PurchaseOrderItems | Procurement |
+| `purchases` | PurchaseReceipts, PurchaseReceiptItems | Receiving |
+| `transactions` | Transactions, TransactionItems | POS sales |
+| `payments` | Payments, PaymentMethods, PaymentProofs | Payment tracking |
+| `lookups` | Units, PaymentMethods, TaxRates, BusinessCategories | Reference data |
+| `settings` | BusinessProfile, NotificationSettings, PrivacySecuritySettings, AccountSettings, AppearanceSettings, OperationalSettings, PaymentSettings, SystemSettings, ReceiptSettings | 9 split tables (was single BusinessSettings) |
+| `audit` | AuditLogs | Full audit trail |
+| `platform` | Plans, Subscriptions, WebhookEvents | Gumroad subscription mirror |
 
-## Product 1 — Niraya Starter
+**Key constants:** `DEFAULT_BUSINESS_ID = 00000000-0000-0000-0000-000000000001`, `DEFAULT_STORE_ID = 00000000-0000-0000-0000-000000000002`
 
-- **Name:** `Niraya Starter`
-- **Type:** Membership
-- **Billing:** Monthly
-- **Price:** `Rp130,000`
-- **Currency:** IDR
-- **Recurrence:** Monthly only
-- **Tagline:** `Run your first store with confidence.`
-- **Short description:** `A complete point-of-sale and inventory toolkit for independent stores.`
+---
 
-**Long description (English):**
+## Authentication Flow
 
-```text
-Niraya Starter gives independent retailers everything they need to sell in person and online without juggling spreadsheets. Ring up sales, track stock, manage customers, and see what is actually selling — all from one clean dashboard.
+**Supabase Auth** (migrated from Neon Auth):
+- Email/password signup → email confirmation → `/auth/callback` → `/onboarding`
+- Email/password login → `/dashboard` → auto-check onboarding status
+- Google OAuth → `/auth/callback` → `/onboarding` (if new) or `/dashboard`
+- Apple OAuth button shows "Coming Soon" toast
+- Forgot password → `/forgot-password` → email link → `/reset-password`
+- Session via Supabase SSR (`@supabase/ssr`)
 
-Built for single-store businesses that want a fast, reliable POS without enterprise complexity.
+**Middleware** (`src/proxy.ts`):
+- Public routes: `/`, `/login`, `/signup`, `/register`, `/menu*`, `/plans`, `/profile`, `/api/business`, `/api/demo/seed`, `/api/public/*`, `/api/internal/jobs/*`
+- Everything else requires session
+- Onboarding check moved to dashboard layout (client-side)
 
-What's included:
-• 1 store
-• Up to 3 team members
-• Up to 100 products
-• POS checkout and receipts
-• Inventory tracking and stock adjustments
-• Customer management
-• Sales and product reports
-• Public storefront and QR menu
-• Email support
+---
+
+## Onboarding Wizard (6 Steps)
+
+Route: `/onboarding` (protected, redirects if already completed)
+
+| Step | Endpoint | Data Collected |
+|------|----------|----------------|
+| 1 | `/api/onboarding/one` | Business name, slug (auto-generated), category, phone, email, address |
+| 2 | `/api/onboarding/two` | Owner name, owner email, owner phone |
+| 3 | `/api/onboarding/three` | Store name, store slug, store address, phone, timezone |
+| 4 | `/api/onboarding/four` | Currency, tax rate, receipt footer, low stock threshold |
+| 5 | `/api/onboarding/five` | Payment methods (cash, card, QRIS), gateway config placeholder |
+| - | `/api/onboarding/status` | Returns `{ needsOnboarding: boolean }` |
+| - | `/api/onboarding/complete` | Finalizes, creates BusinessMembers owner record |
+
+**BusinessCategories** seeded in `core.sql`: Makanan & Minuman, Fashion, Kesehatan & Kecantikan, Elektronik, Lainnya
+
+---
+
+## Membership Tiers (Gumroad)
+
+| Tier | Price | Recurrence | Gumroad Permalink | Limits |
+|------|-------|------------|-------------------|--------|
+| Starter | Rp130,000 | Monthly | `opghbu` | 1 store, 3 users, 100 products |
+| Plus | Rp780,000 | Every 6 months | `ebwsuv` | 2 stores, 10 users, 500 products |
+| Pro | Rp1,560,000 | Yearly | `wpartz` | 5 stores, 25 users, 2,000 products, API access |
+
+Webhook: `/api/webhooks/gumroad` → creates/updates `platform.Subscriptions`
+
+---
+
+## Landing Page (`/`)
+
+**Sections:**
+1. Hero — headline, CTA Daftar/Lihat Fitur
+2. Tentang — "Apa itu Niraya POS?"
+3. **Cara Kerja** (5 langkah) — Daftar → Setup Katalog → Buka Kasir → Terima Pesanan QR → Pantau & Skala
+4. Fitur — 6 cards: POS, Katalog, QR, Tim, Inventori, Laporan
+5. CTA — Mulai Gratis / Lihat Paket
+
+**Footer:** 4 columns — Brand+Social+Copyright+Legal | Produk | Perusahaan | Sumber
+**Legal links:** Privacy, Terms, Cookie Policy (placeholder routes)
+**Cookie Consent:** Floating pill bar with cookie icon, description, Settings/Reject/Accept (blue Accept button)
+
+---
+
+## Mobile Navigation
+
+- **Bottom Nav** (`xl:hidden`): Beranda | Plans | Profil/Masuk (dynamic based on auth)
+- **Desktop Nav** (`xl:flex`): Beranda, Fitur, Plans + Masuk/Daftar buttons
+- No hamburger drawer
+
+---
+
+## Dashboard (`/dashboard`)
+
+**Layout** (`src/app/(dashboard)/layout.tsx`):
+- Role check: `user` → redirect to `/profile`
+- Onboarding check: calls `/api/onboarding/status` → redirect to `/onboarding` if `needsOnboarding`
+
+**Page** (`src/features/dashboard/dashboard-page.tsx`):
+- Metrics cards (revenue, orders, avg order, customers)
+- Revenue chart (14 days)
+- Transaction overview
+- Top products
+- Recent activity
+- Low stock alert banner
+- Recent transactions table
+
+**Data flow:** TanStack Query (`useBusinessQuery`) → `BusinessDataProvider` → Zustand `useBusinessStore` → components
+
+---
+
+## POS Checkout (`/pos`)
+
+Server-side validation (`/api/pos/checkout`):
+- `pg_advisory_xact_lock` for concurrency
+- Request hash for idempotency
+- `FOR UPDATE` on inventory rows
+- Server-side pricing, tax, stock validation
+- Payment proof upload (dev: `.data/payment-proofs`)
+
+---
+
+## Storefront (`/menu`)
+
+Public catalog + QR ordering:
+- `/menu` — store selector
+- `/menu/order/[orderId]` — customer ordering UI
+- `/menu/order/[orderId]/payment` — payment page
+- Guest tokens for orders/payments
+
+---
+
+## Key Files Reference
+
+| Area | File |
+|------|------|
+| Auth server | `src/server/auth/supabase.ts` |
+| Auth client | `src/lib/auth-client.ts`, `src/lib/supabase/client.ts` |
+| Auth API routes | `src/app/api/auth/{signin,signup,signout,user,callback}/route.ts` |
+| Middleware | `src/proxy.ts` |
+| Onboarding API | `src/app/api/onboarding/{one,two,three,four,five,status,complete}/route.ts` |
+| Onboarding UI | `src/features/onboarding/onboarding-wizard.tsx` |
+| Dashboard layout | `src/app/(dashboard)/layout.tsx` |
+| Dashboard page | `src/features/dashboard/dashboard-page.tsx` |
+| Landing page | `src/components/landing/landing-page.tsx` |
+| Mobile bottom nav | `src/components/ui/bottom-nav.tsx` |
+| Auth hook | `src/hooks/use-auth.ts` |
+| Business API | `src/app/api/business/route.ts` |
+| Business service | `src/server/business/service.ts` |
+| Database schema | `drizzle/schema/*.sql` (13 files) |
+| Init SQL | `drizzle/init.sql` (concatenated) |
+| Plans config | `src/lib/plans.ts` |
+| Cookie consent | `src/components/landing/landing-page.tsx` (lines 488-520) |
+
+---
+
+## Commands
+
+```bash
+bun dev              # Development
+bun run build        # Production build
+bun start            # Production server
+bun lint             # oxlint
+bun run typecheck    # tsc --noEmit
+bun test             # Tests
+bun db:generate      # Drizzle generate
+bun db:migrate       # Drizzle migrate
+bun db:push          # Drizzle push (dev only)
+bun db:studio        # Drizzle Studio
+bun db:seed          # Seed business data
+bun db:seed:platform # Seed Gumroad plans
 ```
 
-- **CTA:** `Start with Starter`
+---
 
-## Product 2 — Niraya Plus
+## Current State (as of latest commit)
 
-- **Name:** `Niraya Plus`
-- **Type:** Membership
-- **Billing:** Every 6 months (biannually)
-- **Price:** `Rp780,000`
-- **Currency:** IDR
-- **Recurrence:** Every 6 months only
-- **Tagline:** `Built for growing retail teams.`
-- **Short description:** `Multi-store POS, deeper reports, and room to grow.`
+✅ Landing page polished (Cara Kerja, footer Legal, cookie consent blue button)
+✅ Mobile bottom nav (3 buttons, auth-aware)
+✅ Auth migrated to Supabase (email/password, Google OAuth, forgot/reset password)
+✅ Onboarding wizard (6 steps, API + UI)
+✅ Dashboard onboarding redirect logic
+✅ 13-domain schema in `drizzle/schema/`
+✅ `drizzle/init.sql` consolidated
+✅ No `/verify` page needed (email confirmation → onboarding directly)
+✅ Build passes, typecheck passes, lint passes (pre-existing warnings only)
 
-**Long description (English):**
+---
 
-```text
-Niraya Plus is for businesses that have outgrown a single counter. Run multiple stores, give your team the access they need, and get a clearer view of performance across locations.
+## Environment Variables Required
 
-Everything in Starter, plus multi-store management and advanced reporting.
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 
-What's included:
-• Everything in Starter
-• Up to 2 stores
-• Up to 10 team members
-• Up to 500 products
-• Multi-store inventory and reporting
-• Advanced sales and inventory reports
-• Priority email support
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Gumroad
+GUMROAD_WEBHOOK_SECRET=
+GUMROAD_PRODUCT_STARTER=opghbu
+GUMROAD_PRODUCT_PLUS=ebwsuv
+GUMROAD_PRODUCT_PRO=wpartz
+
+# Database (Supabase pooler)
+DATABASE_URL=postgres://...:6543/postgres?pgbouncer=true&prepare=false
 ```
 
-- **CTA:** `Upgrade to Plus`
+---
 
-## Product 3 — Niraya Pro
+## Notes for ChatGPT
 
-- **Name:** `Niraya Pro`
-- **Type:** Membership
-- **Billing:** Yearly
-- **Price:** `Rp1,560,000`
-- **Currency:** IDR
-- **Recurrence:** Yearly only
-- **Tagline:** `Full control for serious retail operations.`
-- **Short description:** `Maximum stores, users, products, and API access.`
+- This is a **self-hosted** POS, not SaaS multi-tenant (single business per install)
+- Supabase Auth is the identity provider; `core.UserProfiles` links via FK to `auth.users`
+- RLS policies on `UserProfiles`: users can only access own profile
+- Gumroad is billing source of truth; `platform` schema mirrors for entitlements
+- No Hono/Vite/tRPC — pure Next.js App Router
+- Demo mode exists via cookie `niraya_demo=1` (returns static seed data)
+- Payment proofs stored locally in dev; production S3 adapter not implemented
 
-**Long description (English):**
+---
 
-```text
-Niraya Pro is the complete Niraya stack for established retailers. Manage more locations, onboard a larger team, and connect Niraya to the rest of your business with API access.
+## Recent Changes Summary
 
-Everything in Plus, plus higher limits and API access.
+1. Added "Cara Kerja" section (5 steps) to landing page
+2. Footer restructured: 4 columns, Legal links at bottom (Privacy, Terms, Cookie Policy)
+3. Cookie consent: cookie icon + description, blue Accept button
+4. Mobile bottom nav: Beranda | Plans | Profil/Masuk (no hamburger)
+5. Auth callback redirects to `/onboarding` (not `/dashboard`)
+6. Login goes to `/dashboard` → layout checks onboarding status
+7. Removed `/verify` page from flow
+8. Email confirmation → `/auth/callback` → `/onboarding`
 
-What's included:
-• Everything in Plus
-• Up to 5 stores
-• Up to 25 team members
-• Up to 2,000 products
-• API access
-• Priority support
-```
+---
 
-- **CTA:** `Go Pro`
-
-## Cover images
-
-If image upload is supported by the MCP:
-
-- Use a clean, minimal cover with the **Niraya** wordmark and the package name.
-- Palette: deep green, warm cream, soft gold accent.
-- Do not use stock photos, neon colors, or busy gradients.
-- Keep the package name readable at small sizes.
-
-If image upload is not supported, skip it and report that covers need to be added manually.
-
-## Execution steps
-
-1. Search the account for existing products named:
-   - `Niraya Starter`
-   - `Niraya Plus`
-   - `Niraya Pro`
-2. Create the three products as drafts with the fields above.
-3. Verify each product:
-   - Product type is membership
-   - Recurrence is correct
-   - Price is correct
-   - Currency is IDR
-   - Status is draft / unpublished
-4. Do not publish.
-5. Return this table with the real values:
-
-| Product | Product ID | Permalink | Checkout URL | Status | Recurrence | Price |
-|---|---|---|---|---|---|---|
-| Niraya Starter | ... | ... | ... | draft | monthly | Rp130,000 |
-| Niraya Plus | ... | ... | ... | draft | every 6 months | Rp780,000 |
-| Niraya Pro | ... | ... | ... | draft | yearly | Rp1,560,000 |
-
-6. End with:
-
-> All three Niraya drafts are ready. Nothing has been published. Do you want me to publish them?
-
-## Stop conditions
-
-Stop immediately and report if:
-
-- The MCP cannot create membership products.
-- The MCP cannot set a recurrence.
-- The MCP cannot set the price or currency.
-- A product with the same name already exists.
-- Gumroad rejects the request because of tier/recurrence rules.
-- You are asked to publish without explicit approval.
-
-## Final report format
-
-Return:
-
-1. **Created products** — one line per product.
-2. **Product IDs** — exact raw IDs.
-3. **Permalinks and checkout URLs** — if available.
-4. **Missing capabilities** — any field the MCP could not set.
-5. **Publish status** — explicitly state that nothing was published.
-6. **Approval question** — ask whether to publish.
-
-Do not invent product IDs, URLs, or success messages. If a step fails, say exactly what failed.
+*Generated for ChatGPT context sharing. Update as system evolves.*

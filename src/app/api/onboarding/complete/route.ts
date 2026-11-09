@@ -6,8 +6,9 @@ import {
   businessMembers,
   userProfiles,
   roles,
+  subscriptions,
 } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, inArray, ilike } from "drizzle-orm";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   }
 
   const userId = String(sessionUser.id);
+  const userEmail = sessionUser.email?.toLowerCase().trim();
 
   try {
     const body = await request.json();
@@ -34,6 +36,25 @@ export async function POST(request: Request) {
 
     if (!business) {
       return NextResponse.json({ error: "Usaha tidak ditemukan atau bukan pemilik" }, { status: 403 });
+    }
+
+    if (!userEmail) {
+      return NextResponse.json({ error: "Email pengguna tidak ditemukan" }, { status: 400 });
+    }
+
+    const activeSubscription = await db.query.subscriptions.findFirst({
+      where: and(
+        ilike(subscriptions.purchaserEmail, userEmail),
+        isNull(subscriptions.businessId),
+        inArray(subscriptions.status, ["active", "cancel_at_period_end"])
+      ),
+    });
+
+    if (!activeSubscription) {
+      return NextResponse.json(
+        { error: "Langganan aktif tidak ditemukan. Silakan beli paket terlebih dahulu." },
+        { status: 403 }
+      );
     }
 
     const ownerRole = await db.query.roles.findFirst({
@@ -86,11 +107,23 @@ export async function POST(request: Request) {
             updatedAt: new Date(),
           },
         });
+
+      await tx
+        .update(subscriptions)
+        .set({
+          businessId,
+          claimedAt: new Date(),
+          claimedByUserId: userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptions.id, activeSubscription.id));
     });
 
     return NextResponse.json({
       message: "Onboarding selesai! Selamat datang sebagai Owner.",
       redirectTo: "/dashboard",
+      subscriptionId: activeSubscription.id,
+      planId: activeSubscription.planId,
     });
   } catch (error) {
     console.error("Onboarding complete error:", error);

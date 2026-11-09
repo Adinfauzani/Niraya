@@ -4,6 +4,40 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Core schema: roles, permissions, businesses, stores, user profiles, business members
 CREATE SCHEMA "core";
 
+-- Helper function to check if current user is an active member of a business
+-- This function is used in RLS policies for multi-tenant isolation
+CREATE OR REPLACE FUNCTION "core"."is_business_member"(p_business_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = core, public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM "core"."BusinessMembers"
+    WHERE "BusinessId" = p_business_id
+      AND "UserId" = auth.uid()::text
+      AND "Status" = 'active'
+  );
+$$;
+
+-- Helper function to check if current user has a specific role in a business
+CREATE OR REPLACE FUNCTION "core"."has_business_role"(p_business_id uuid, p_role text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = core, public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM "core"."BusinessMembers"
+    WHERE "BusinessId" = p_business_id
+      AND "UserId" = auth.uid()::text
+      AND "Status" = 'active'
+      AND "Role" = p_role
+  );
+$$;
+
 -- Roles: application roles for RBAC
 CREATE TABLE "core"."Roles" (
     "Code" text PRIMARY KEY NOT NULL,
@@ -58,6 +92,25 @@ CREATE TABLE "core"."Businesses" (
 );
 CREATE INDEX "Businesses_Status_idx" ON "core"."Businesses" ("Status");
 
+-- Enable RLS on Businesses
+ALTER TABLE "core"."Businesses" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read businesses they are active members of
+CREATE POLICY "businesses_select_member" ON "core"."Businesses"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("Id"));
+
+-- Policy: authenticated users can insert businesses (onboarding creates business, then adds membership)
+CREATE POLICY "businesses_insert_owner" ON "core"."Businesses"
+    FOR INSERT TO authenticated
+    WITH CHECK (auth.uid()::text = "OwnerUserId");
+
+-- Policy: business owners/admins can update their business
+CREATE POLICY "businesses_update_admin" ON "core"."Businesses"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("Id", 'owner') OR "core"."has_business_role"("Id", 'admin'))
+    WITH CHECK ("core"."has_business_role"("Id", 'owner') OR "core"."has_business_role"("Id", 'admin'));
+
 -- Stores: outlets/locations belonging to a business
 CREATE TABLE "core"."Stores" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -76,6 +129,25 @@ CREATE TABLE "core"."Stores" (
 );
 CREATE INDEX "Stores_BusinessId_idx" ON "core"."Stores" ("BusinessId");
 CREATE INDEX "Stores_IsActive_idx" ON "core"."Stores" ("IsActive");
+
+-- Enable RLS on Stores
+ALTER TABLE "core"."Stores" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read stores of businesses they are active members of
+CREATE POLICY "stores_select_member" ON "core"."Stores"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins can insert stores
+CREATE POLICY "stores_insert_admin" ON "core"."Stores"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
+
+-- Policy: business owners/admins can update stores
+CREATE POLICY "stores_update_admin" ON "core"."Stores"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- UserProfiles: application profile linking to Supabase Auth user
 -- Primary key matches auth.users(id) for direct FK relationship.
@@ -133,6 +205,30 @@ CREATE INDEX "BusinessMembers_BusinessId_idx" ON "core"."BusinessMembers" ("Busi
 CREATE INDEX "BusinessMembers_UserId_idx" ON "core"."BusinessMembers" ("UserId");
 CREATE INDEX "BusinessMembers_StoreId_idx" ON "core"."BusinessMembers" ("StoreId");
 
+-- Enable RLS on BusinessMembers
+ALTER TABLE "core"."BusinessMembers" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read their own memberships
+CREATE POLICY "business_members_select_own" ON "core"."BusinessMembers"
+    FOR SELECT TO authenticated
+    USING ("UserId" = auth.uid()::text);
+
+-- Policy: business owners/admins can read all memberships for their business
+CREATE POLICY "business_members_select_admin" ON "core"."BusinessMembers"
+    FOR SELECT TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
+
+-- Policy: business owners can insert memberships (invite users)
+CREATE POLICY "business_members_insert_owner" ON "core"."BusinessMembers"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner'));
+
+-- Policy: business owners/admins can update memberships
+CREATE POLICY "business_members_update_admin" ON "core"."BusinessMembers"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
+
 -- DiningTables: QR table/location tokens. Raw token is never stored; only hash.
 CREATE TABLE "core"."DiningTables" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -153,3 +249,22 @@ CREATE INDEX "DiningTables_BusinessId_idx" ON "core"."DiningTables" ("BusinessId
 CREATE INDEX "DiningTables_StoreId_idx" ON "core"."DiningTables" ("StoreId");
 CREATE INDEX "DiningTables_IsActive_idx" ON "core"."DiningTables" ("IsActive");
 CREATE INDEX "DiningTables_QrType_idx" ON "core"."DiningTables" ("QrType");
+
+-- Enable RLS on DiningTables
+ALTER TABLE "core"."DiningTables" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read dining tables of businesses they are active members of
+CREATE POLICY "dining_tables_select_member" ON "core"."DiningTables"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers can insert dining tables
+CREATE POLICY "dining_tables_insert_manager" ON "core"."DiningTables"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Policy: business owners/admins/managers can update dining tables
+CREATE POLICY "dining_tables_update_manager" ON "core"."DiningTables"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));

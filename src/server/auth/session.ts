@@ -157,6 +157,10 @@ export const ACTION_ROLES: Record<string, UserRole> = {
   "user.profile.delete": "admin",
   // Stok
   "stock.adjust": "manager",
+  // Toko
+  "store.create": "owner",
+  "store.update": "admin",
+  "store.delete": "owner",
   // QR ordering
   "qr.manage": "manager",
   "qr.payment.verify": "manager",

@@ -20,6 +20,25 @@ CREATE INDEX "Categories_ParentCategoryId_idx" ON "products"."Categories" ("Pare
 CREATE INDEX "Categories_Name_idx" ON "products"."Categories" ("Name");
 CREATE INDEX "Categories_Status_idx" ON "products"."Categories" ("Status");
 
+-- Enable RLS on Categories
+ALTER TABLE "products"."Categories" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read categories of businesses they are active members of
+CREATE POLICY "categories_select_member" ON "products"."Categories"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers can insert categories
+CREATE POLICY "categories_insert_manager" ON "products"."Categories"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Policy: business owners/admins/managers can update categories
+CREATE POLICY "categories_update_manager" ON "products"."Categories"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
 -- Products: catalog items; SKU is unique per business.
 CREATE TABLE "products"."Products" (
     "Id" text PRIMARY KEY NOT NULL,
@@ -55,6 +74,25 @@ CREATE INDEX "Products_Barcode_idx" ON "products"."Products" ("Barcode");
 CREATE INDEX "Products_Name_idx" ON "products"."Products" ("Name");
 CREATE INDEX "Products_Status_idx" ON "products"."Products" ("Status");
 
+-- Enable RLS on Products
+ALTER TABLE "products"."Products" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read products of businesses they are active members of
+CREATE POLICY "products_select_member" ON "products"."Products"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers can insert products
+CREATE POLICY "products_insert_manager" ON "products"."Products"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Policy: business owners/admins/managers can update products
+CREATE POLICY "products_update_manager" ON "products"."Products"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
 -- ProductVariants: variants such as size or flavor.
 CREATE TABLE "products"."ProductVariants" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -72,6 +110,25 @@ CREATE TABLE "products"."ProductVariants" (
 );
 CREATE INDEX "ProductVariants_ProductId_idx" ON "products"."ProductVariants" ("ProductId");
 CREATE INDEX "ProductVariants_Barcode_idx" ON "products"."ProductVariants" ("Barcode");
+
+-- Enable RLS on ProductVariants
+ALTER TABLE "products"."ProductVariants" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read variants of businesses they are active members of
+CREATE POLICY "product_variants_select_member" ON "products"."ProductVariants"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers can insert variants
+CREATE POLICY "product_variants_insert_manager" ON "products"."ProductVariants"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Policy: business owners/admins/managers can update variants
+CREATE POLICY "product_variants_update_manager" ON "products"."ProductVariants"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
 
 -- ProductUnits: product units and their conversion factor.
 CREATE TABLE "products"."ProductUnits" (
@@ -118,3 +175,46 @@ CREATE TABLE "products"."ProductPrices" (
 CREATE INDEX "ProductPrices_ProductId_idx" ON "products"."ProductPrices" ("ProductId");
 CREATE INDEX "ProductPrices_StoreId_idx" ON "products"."ProductPrices" ("StoreId");
 CREATE INDEX "ProductPrices_PriceType_idx" ON "products"."ProductPrices" ("PriceType");
+
+-- Enable RLS on ProductPrices
+ALTER TABLE "products"."ProductPrices" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read prices of businesses they are active members of (via store)
+CREATE POLICY "product_prices_select_member" ON "products"."ProductPrices"
+    FOR SELECT TO authenticated
+    USING (
+      "StoreId" IS NULL OR EXISTS (
+        SELECT 1 FROM "core"."Stores" s
+        WHERE s."Id" = "ProductPrices"."StoreId"
+          AND "core"."is_business_member"(s."BusinessId")
+      )
+    );
+
+-- Policy: business owners/admins/managers can insert prices
+CREATE POLICY "product_prices_insert_manager" ON "products"."ProductPrices"
+    FOR INSERT TO authenticated
+    WITH CHECK (
+      "StoreId" IS NULL OR EXISTS (
+        SELECT 1 FROM "core"."Stores" s
+        WHERE s."Id" = "ProductPrices"."StoreId"
+          AND ("core"."has_business_role"(s."BusinessId", 'owner') OR "core"."has_business_role"(s."BusinessId", 'admin') OR "core"."has_business_role"(s."BusinessId", 'manager'))
+      )
+    );
+
+-- Policy: business owners/admins/managers can update prices
+CREATE POLICY "product_prices_update_manager" ON "products"."ProductPrices"
+    FOR UPDATE TO authenticated
+    USING (
+      "StoreId" IS NULL OR EXISTS (
+        SELECT 1 FROM "core"."Stores" s
+        WHERE s."Id" = "ProductPrices"."StoreId"
+          AND ("core"."has_business_role"(s."BusinessId", 'owner') OR "core"."has_business_role"(s."BusinessId", 'admin') OR "core"."has_business_role"(s."BusinessId", 'manager'))
+      )
+    )
+    WITH CHECK (
+      "StoreId" IS NULL OR EXISTS (
+        SELECT 1 FROM "core"."Stores" s
+        WHERE s."Id" = "ProductPrices"."StoreId"
+          AND ("core"."has_business_role"(s."BusinessId", 'owner') OR "core"."has_business_role"(s."BusinessId", 'admin') OR "core"."has_business_role"(s."BusinessId", 'manager'))
+      )
+    );

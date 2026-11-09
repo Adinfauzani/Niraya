@@ -46,6 +46,25 @@ CREATE INDEX "Transactions_CreatedAt_idx" ON "transactions"."Transactions" ("Cre
 CREATE INDEX "Transactions_Status_idx" ON "transactions"."Transactions" ("Status");
 CREATE INDEX "Transactions_PaymentMethod_idx" ON "transactions"."Transactions" ("PaymentMethod");
 
+-- Enable RLS on Transactions
+ALTER TABLE "transactions"."Transactions" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read transactions of businesses they are active members of
+CREATE POLICY "transactions_select_member" ON "transactions"."Transactions"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers/cashiers can insert transactions
+CREATE POLICY "transactions_insert_staff" ON "transactions"."Transactions"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
+
+-- Policy: business owners/admins/managers can update transactions (cashiers can void)
+CREATE POLICY "transactions_update_manager" ON "transactions"."Transactions"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
 -- TransactionItems: line items; snapshots product name, SKU, and price.
 CREATE TABLE "transactions"."TransactionItems" (
     "Id" text PRIMARY KEY NOT NULL,
@@ -72,6 +91,27 @@ CREATE TABLE "transactions"."TransactionItems" (
 CREATE INDEX "TransactionItems_TransactionId_idx" ON "transactions"."TransactionItems" ("TransactionId");
 CREATE INDEX "TransactionItems_ProductId_idx" ON "transactions"."TransactionItems" ("ProductId");
 CREATE INDEX "TransactionItems_ProductVariantId_idx" ON "transactions"."TransactionItems" ("ProductVariantId");
+
+-- Enable RLS on TransactionItems
+ALTER TABLE "transactions"."TransactionItems" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read transaction items of businesses they are active members of (via transaction)
+CREATE POLICY "transaction_items_select_member" ON "transactions"."TransactionItems"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionItems"."TransactionId"
+        AND "core"."is_business_member"(t."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers/cashiers can insert transaction items
+CREATE POLICY "transaction_items_insert_staff" ON "transactions"."TransactionItems"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionItems"."TransactionId"
+        AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager') OR "core"."has_business_role"(t."BusinessId", 'cashier'))
+    ));
 
 -- Orders: operational source of truth for POS and QR ordering.
 CREATE TABLE "transactions"."Orders" (
@@ -121,6 +161,25 @@ CREATE INDEX "Orders_Source_idx" ON "transactions"."Orders" ("OrderSource");
 CREATE INDEX "Orders_CreatedAt_idx" ON "transactions"."Orders" ("CreatedAt");
 CREATE INDEX "Orders_DiningTableId_idx" ON "transactions"."Orders" ("DiningTableId");
 
+-- Enable RLS on Orders
+ALTER TABLE "transactions"."Orders" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read orders of businesses they are active members of
+CREATE POLICY "orders_select_member" ON "transactions"."Orders"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers/cashiers can insert orders
+CREATE POLICY "orders_insert_staff" ON "transactions"."Orders"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
+
+-- Policy: business owners/admins/managers/cashiers can update orders
+CREATE POLICY "orders_update_staff" ON "transactions"."Orders"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
+
 -- OrderItems: order line snapshots; history stays valid if the product changes.
 CREATE TABLE "transactions"."OrderItems" (
     "Id" text PRIMARY KEY NOT NULL,
@@ -142,6 +201,27 @@ CREATE TABLE "transactions"."OrderItems" (
 CREATE INDEX "OrderItems_OrderId_idx" ON "transactions"."OrderItems" ("OrderId");
 CREATE INDEX "OrderItems_ProductId_idx" ON "transactions"."OrderItems" ("ProductId");
 
+-- Enable RLS on OrderItems
+ALTER TABLE "transactions"."OrderItems" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read order items of businesses they are active members of (via order)
+CREATE POLICY "order_items_select_member" ON "transactions"."OrderItems"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "OrderItems"."OrderId"
+        AND "core"."is_business_member"(o."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers/cashiers can insert order items
+CREATE POLICY "order_items_insert_staff" ON "transactions"."OrderItems"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "OrderItems"."OrderId"
+        AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager') OR "core"."has_business_role"(o."BusinessId", 'cashier'))
+    ));
+
 -- OrderStatusHistory: audit trail of order/payment status changes.
 CREATE TABLE "transactions"."OrderStatusHistory" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -158,6 +238,27 @@ CREATE TABLE "transactions"."OrderStatusHistory" (
 CREATE INDEX "OrderStatusHistory_OrderId_idx" ON "transactions"."OrderStatusHistory" ("OrderId");
 CREATE INDEX "OrderStatusHistory_CreatedAt_idx" ON "transactions"."OrderStatusHistory" ("CreatedAt");
 
+-- Enable RLS on OrderStatusHistory
+ALTER TABLE "transactions"."OrderStatusHistory" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read order status history of businesses they are active members of
+CREATE POLICY "order_status_history_select_member" ON "transactions"."OrderStatusHistory"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "OrderStatusHistory"."OrderId"
+        AND "core"."is_business_member"(o."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers/cashiers can insert order status history
+CREATE POLICY "order_status_history_insert_staff" ON "transactions"."OrderStatusHistory"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "OrderStatusHistory"."OrderId"
+        AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager') OR "core"."has_business_role"(o."BusinessId", 'cashier'))
+    ));
+
 -- CheckoutIdempotency: idempotency keys for POS checkout.
 CREATE TABLE "transactions"."CheckoutIdempotency" (
     "Key" text PRIMARY KEY NOT NULL,
@@ -173,6 +274,41 @@ CREATE INDEX "CheckoutIdempotency_TransactionId_idx" ON "transactions"."Checkout
 CREATE INDEX "CheckoutIdempotency_OrderId_idx" ON "transactions"."CheckoutIdempotency" ("OrderId");
 CREATE INDEX "CheckoutIdempotency_ExpiresAt_idx" ON "transactions"."CheckoutIdempotency" ("ExpiresAt");
 
+-- Enable RLS on CheckoutIdempotency
+ALTER TABLE "transactions"."CheckoutIdempotency" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read idempotency keys of businesses they are active members of
+CREATE POLICY "checkout_idempotency_select_member" ON "transactions"."CheckoutIdempotency"
+    FOR SELECT TO authenticated
+    USING (
+      ("TransactionId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Transactions" t
+        WHERE t."Id" = "CheckoutIdempotency"."TransactionId"
+          AND "core"."is_business_member"(t."BusinessId")
+      )) OR
+      ("OrderId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Orders" o
+        WHERE o."Id" = "CheckoutIdempotency"."OrderId"
+          AND "core"."is_business_member"(o."BusinessId")
+      ))
+    );
+
+-- Policy: business owners/admins/managers/cashiers can insert idempotency keys
+CREATE POLICY "checkout_idempotency_insert_staff" ON "transactions"."CheckoutIdempotency"
+    FOR INSERT TO authenticated
+    WITH CHECK (
+      ("TransactionId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Transactions" t
+        WHERE t."Id" = "CheckoutIdempotency"."TransactionId"
+          AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager') OR "core"."has_business_role"(t."BusinessId", 'cashier'))
+      )) OR
+      ("OrderId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Orders" o
+        WHERE o."Id" = "CheckoutIdempotency"."OrderId"
+          AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager') OR "core"."has_business_role"(o."BusinessId", 'cashier'))
+      ))
+    );
+
 -- GuestOrderAccess: hashed guest order access tokens scoped to one order.
 CREATE TABLE "transactions"."GuestOrderAccess" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -186,3 +322,38 @@ CREATE TABLE "transactions"."GuestOrderAccess" (
 );
 CREATE INDEX "GuestOrderAccess_OrderId_idx" ON "transactions"."GuestOrderAccess" ("OrderId");
 CREATE INDEX "GuestOrderAccess_ExpiresAt_idx" ON "transactions"."GuestOrderAccess" ("ExpiresAt");
+
+-- Enable RLS on GuestOrderAccess
+ALTER TABLE "transactions"."GuestOrderAccess" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read guest access of businesses they are active members of
+CREATE POLICY "guest_order_access_select_member" ON "transactions"."GuestOrderAccess"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "GuestOrderAccess"."OrderId"
+        AND "core"."is_business_member"(o."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers can insert guest access
+CREATE POLICY "guest_order_access_insert_manager" ON "transactions"."GuestOrderAccess"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "GuestOrderAccess"."OrderId"
+        AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager'))
+    ));
+
+-- Policy: business owners/admins/managers can update guest access
+CREATE POLICY "guest_order_access_update_manager" ON "transactions"."GuestOrderAccess"
+    FOR UPDATE TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "GuestOrderAccess"."OrderId"
+        AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager'))
+    ))
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Orders" o
+      WHERE o."Id" = "GuestOrderAccess"."OrderId"
+        AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager'))
+    ));

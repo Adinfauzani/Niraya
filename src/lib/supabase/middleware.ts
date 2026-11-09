@@ -50,14 +50,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Auth routes - redirect to dashboard if already logged in
+  // Auth routes - redirect to onboarding if already logged in
+  // Onboarding page will check if completed and redirect to dashboard
   const authPaths = ["/login", "/signup", "/register", "/forgot-password", "/reset-password", "/auth/callback"];
   const isAuthPage = authPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
 
   if (isAuthPage && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/onboarding", request.url));
   }
 
   return supabaseResponse;

@@ -31,6 +31,69 @@ CREATE INDEX "Payments_OrderId_idx" ON "payments"."Payments" ("OrderId");
 CREATE INDEX "Payments_PaymentMethod_idx" ON "payments"."Payments" ("PaymentMethod");
 CREATE INDEX "Payments_PaidAt_idx" ON "payments"."Payments" ("PaidAt");
 
+-- Enable RLS on Payments
+ALTER TABLE "payments"."Payments" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read payments of businesses they are active members of
+CREATE POLICY "payments_select_member" ON "payments"."Payments"
+    FOR SELECT TO authenticated
+    USING (
+      ("TransactionId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Transactions" t
+        WHERE t."Id" = "Payments"."TransactionId"
+          AND "core"."is_business_member"(t."BusinessId")
+      )) OR
+      ("OrderId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Orders" o
+        WHERE o."Id" = "Payments"."OrderId"
+          AND "core"."is_business_member"(o."BusinessId")
+      ))
+    );
+
+-- Policy: business owners/admins/managers/cashiers can insert payments
+CREATE POLICY "payments_insert_staff" ON "payments"."Payments"
+    FOR INSERT TO authenticated
+    WITH CHECK (
+      ("TransactionId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Transactions" t
+        WHERE t."Id" = "Payments"."TransactionId"
+          AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager') OR "core"."has_business_role"(t."BusinessId", 'cashier'))
+      )) OR
+      ("OrderId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Orders" o
+        WHERE o."Id" = "Payments"."OrderId"
+          AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager') OR "core"."has_business_role"(o."BusinessId", 'cashier'))
+      ))
+    );
+
+-- Policy: business owners/admins/managers can update payments (verification, refunds)
+CREATE POLICY "payments_update_manager" ON "payments"."Payments"
+    FOR UPDATE TO authenticated
+    USING (
+      ("TransactionId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Transactions" t
+        WHERE t."Id" = "Payments"."TransactionId"
+          AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager'))
+      )) OR
+      ("OrderId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Orders" o
+        WHERE o."Id" = "Payments"."OrderId"
+          AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager'))
+      ))
+    )
+    WITH CHECK (
+      ("TransactionId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Transactions" t
+        WHERE t."Id" = "Payments"."TransactionId"
+          AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager'))
+      )) OR
+      ("OrderId" IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "transactions"."Orders" o
+        WHERE o."Id" = "Payments"."OrderId"
+          AND ("core"."has_business_role"(o."BusinessId", 'owner') OR "core"."has_business_role"(o."BusinessId", 'admin') OR "core"."has_business_role"(o."BusinessId", 'manager'))
+      ))
+    );
+
 -- TransactionDiscounts: discount detail for a transaction.
 CREATE TABLE "payments"."TransactionDiscounts" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -47,6 +110,27 @@ CREATE TABLE "payments"."TransactionDiscounts" (
 );
 CREATE INDEX "TransactionDiscounts_TransactionId_idx" ON "payments"."TransactionDiscounts" ("TransactionId");
 CREATE INDEX "TransactionDiscounts_DiscountId_idx" ON "payments"."TransactionDiscounts" ("DiscountId");
+
+-- Enable RLS on TransactionDiscounts
+ALTER TABLE "payments"."TransactionDiscounts" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read transaction discounts of businesses they are active members of
+CREATE POLICY "transaction_discounts_select_member" ON "payments"."TransactionDiscounts"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionDiscounts"."TransactionId"
+        AND "core"."is_business_member"(t."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers/cashiers can insert transaction discounts
+CREATE POLICY "transaction_discounts_insert_staff" ON "payments"."TransactionDiscounts"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionDiscounts"."TransactionId"
+        AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager') OR "core"."has_business_role"(t."BusinessId", 'cashier'))
+    ));
 
 -- TransactionRefunds: refund headers; the original transaction is never deleted.
 CREATE TABLE "payments"."TransactionRefunds" (
@@ -67,6 +151,41 @@ CREATE TABLE "payments"."TransactionRefunds" (
 CREATE INDEX "TransactionRefunds_TransactionId_idx" ON "payments"."TransactionRefunds" ("TransactionId");
 CREATE INDEX "TransactionRefunds_Status_idx" ON "payments"."TransactionRefunds" ("Status");
 
+-- Enable RLS on TransactionRefunds
+ALTER TABLE "payments"."TransactionRefunds" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read refunds of businesses they are active members of
+CREATE POLICY "transaction_refunds_select_member" ON "payments"."TransactionRefunds"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionRefunds"."TransactionId"
+        AND "core"."is_business_member"(t."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers can insert refunds
+CREATE POLICY "transaction_refunds_insert_manager" ON "payments"."TransactionRefunds"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionRefunds"."TransactionId"
+        AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager'))
+    ));
+
+-- Policy: business owners/admins/managers can update refunds
+CREATE POLICY "transaction_refunds_update_manager" ON "payments"."TransactionRefunds"
+    FOR UPDATE TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionRefunds"."TransactionId"
+        AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager'))
+    ))
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "transactions"."Transactions" t
+      WHERE t."Id" = "TransactionRefunds"."TransactionId"
+        AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager'))
+    ));
+
 -- TransactionRefundItems: refund lines referencing original transaction items.
 CREATE TABLE "payments"."TransactionRefundItems" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -84,3 +203,26 @@ CREATE TABLE "payments"."TransactionRefundItems" (
 CREATE INDEX "TransactionRefundItems_RefundId_idx" ON "payments"."TransactionRefundItems" ("RefundId");
 CREATE INDEX "TransactionRefundItems_TransactionItemId_idx" ON "payments"."TransactionRefundItems" ("TransactionItemId");
 CREATE INDEX "TransactionRefundItems_ProductId_idx" ON "payments"."TransactionRefundItems" ("ProductId");
+
+-- Enable RLS on TransactionRefundItems
+ALTER TABLE "payments"."TransactionRefundItems" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read refund items of businesses they are active members of
+CREATE POLICY "transaction_refund_items_select_member" ON "payments"."TransactionRefundItems"
+    FOR SELECT TO authenticated
+    USING (EXISTS (
+      SELECT 1 FROM "payments"."TransactionRefunds" tr
+      JOIN "transactions"."Transactions" t ON t."Id" = tr."TransactionId"
+      WHERE tr."Id" = "TransactionRefundItems"."RefundId"
+        AND "core"."is_business_member"(t."BusinessId")
+    ));
+
+-- Policy: business owners/admins/managers can insert refund items
+CREATE POLICY "transaction_refund_items_insert_manager" ON "payments"."TransactionRefundItems"
+    FOR INSERT TO authenticated
+    WITH CHECK (EXISTS (
+      SELECT 1 FROM "payments"."TransactionRefunds" tr
+      JOIN "transactions"."Transactions" t ON t."Id" = tr."TransactionId"
+      WHERE tr."Id" = "TransactionRefundItems"."RefundId"
+        AND ("core"."has_business_role"(t."BusinessId", 'owner') OR "core"."has_business_role"(t."BusinessId", 'admin') OR "core"."has_business_role"(t."BusinessId", 'manager'))
+    ));

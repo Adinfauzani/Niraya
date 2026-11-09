@@ -1,7 +1,7 @@
 -- Lookups schema: payment methods, tax rates, discounts
 CREATE SCHEMA "lookups";
 
--- PaymentMethods: payment options available to POS.
+-- PaymentMethods: payment options available to POS (global, not tenant-scoped).
 CREATE TABLE "lookups"."PaymentMethods" (
     "Code" text PRIMARY KEY NOT NULL,
     "Name" text NOT NULL,
@@ -30,6 +30,25 @@ CREATE TABLE "lookups"."TaxRates" (
 CREATE INDEX "TaxRates_BusinessId_idx" ON "lookups"."TaxRates" ("BusinessId");
 CREATE INDEX "TaxRates_IsDefault_idx" ON "lookups"."TaxRates" ("IsDefault");
 
+-- Enable RLS on TaxRates
+ALTER TABLE "lookups"."TaxRates" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read tax rates of businesses they are active members of
+CREATE POLICY "tax_rates_select_member" ON "lookups"."TaxRates"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers can insert tax rates
+CREATE POLICY "tax_rates_insert_manager" ON "lookups"."TaxRates"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Policy: business owners/admins/managers can update tax rates
+CREATE POLICY "tax_rates_update_manager" ON "lookups"."TaxRates"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
 -- Discounts: discounts applicable to transactions.
 CREATE TABLE "lookups"."Discounts" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -51,7 +70,26 @@ CREATE TABLE "lookups"."Discounts" (
 CREATE INDEX "Discounts_BusinessId_idx" ON "lookups"."Discounts" ("BusinessId");
 CREATE INDEX "Discounts_IsActive_idx" ON "lookups"."Discounts" ("IsActive");
 
--- BusinessCategories: predefined business categories for onboarding.
+-- Enable RLS on Discounts
+ALTER TABLE "lookups"."Discounts" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: authenticated users can read discounts of businesses they are active members of
+CREATE POLICY "discounts_select_member" ON "lookups"."Discounts"
+    FOR SELECT TO authenticated
+    USING ("core"."is_business_member"("BusinessId"));
+
+-- Policy: business owners/admins/managers can insert discounts
+CREATE POLICY "discounts_insert_manager" ON "lookups"."Discounts"
+    FOR INSERT TO authenticated
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Policy: business owners/admins/managers can update discounts
+CREATE POLICY "discounts_update_manager" ON "lookups"."Discounts"
+    FOR UPDATE TO authenticated
+    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
+    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- BusinessCategories: predefined business categories for onboarding (global, not tenant-scoped).
 CREATE TABLE "lookups"."BusinessCategories" (
     "Code" text PRIMARY KEY NOT NULL,
     "Name" text NOT NULL,

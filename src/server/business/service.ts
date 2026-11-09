@@ -16,7 +16,6 @@ import {
   businessSettings,
   categories,
   customers,
-  DEFAULT_BUSINESS_ID,
   DEFAULT_STORE_ID,
   inventory,
   products,
@@ -26,7 +25,9 @@ import {
   stockMovements,
   transactionItems,
   transactions,
+  stores,
 } from "@/server/db/schema";
+import { checkUserLimit, checkStoreLimit, checkProductLimit } from "@/server/entitlements/check";
 
 const money = (value: number) => value.toFixed(2);
 const number = (value: string | null | undefined) => Number(value ?? 0);
@@ -68,6 +69,8 @@ export type ActingUser = {
  */
 async function upsertInventory(
   tx: any,
+  businessId: string,
+  storeId: string,
   productId: string,
   stockQuantity: number,
   minimumStock: number
@@ -75,8 +78,8 @@ async function upsertInventory(
   await tx
     .insert(inventory)
     .values({
-      businessId: DEFAULT_BUSINESS_ID,
-      storeId: DEFAULT_STORE_ID,
+      businessId,
+      storeId,
       productId,
       stockQuantity,
       minimumStock,
@@ -92,12 +95,12 @@ async function upsertInventory(
     });
 }
 
-async function loadBusinessSettingsSafe(): Promise<Record<string, any> | null> {
+async function loadBusinessSettingsSafe(businessId: string): Promise<Record<string, any> | null> {
   try {
     const rows = await db
       .select()
       .from(businessSettings)
-      .where(eq(businessSettings.id, "default"))
+      .where(and(eq(businessSettings.id, "default"), eq(businessSettings.businessId, businessId)))
       .limit(1);
     return (rows[0] as any) ?? null;
   } catch {
@@ -108,7 +111,7 @@ async function loadBusinessSettingsSafe(): Promise<Record<string, any> | null> {
                "QrOrderingEnabled", "QrManualTransferEnabled", "ManualTransferBankName",
                "ManualTransferAccountName", "ManualTransferAccountNumber", "ManualTransferInstructions",
                "ReservationExpiryMinutes", "PaymentGatewayModuleStatus", "CreatedAt", "UpdatedAt"
-        from "settings"."BusinessSettings" where "Id" = 'default' limit 1
+        from "settings"."BusinessSettings" where "Id" = 'default' and "BusinessId" = ${businessId}::uuid limit 1
       `);
       const row = (result as any)?.rows?.[0] ?? (Array.isArray(result) ? result[0] : null);
       if (row) return row;
@@ -117,7 +120,7 @@ async function loadBusinessSettingsSafe(): Promise<Record<string, any> | null> {
       const result = await db.execute(sql`
         select "Id", "BusinessName", "Address", "Phone", "Email", "Currency", "Timezone",
                "TaxRate", "MemberDiscountRate", "LowStockThreshold", "LegacyReceiptFooter"
-        from "settings"."BusinessSettings" where "Id" = 'default' limit 1
+        from "settings"."BusinessSettings" where "Id" = 'default' and "BusinessId" = ${businessId}::uuid limit 1
       `);
       const row = (result as any)?.rows?.[0] ?? (Array.isArray(result) ? result[0] : null);
       return row ?? null;
@@ -128,15 +131,15 @@ async function loadBusinessSettingsSafe(): Promise<Record<string, any> | null> {
   }
 }
 
-async function loadReceiptFooterSafe(): Promise<string | null> {
+async function loadReceiptFooterSafe(businessId: string, storeId: string): Promise<string | null> {
   try {
     const rows = await db
       .select()
       .from(receiptSettings)
       .where(
         and(
-          eq(receiptSettings.businessId, DEFAULT_BUSINESS_ID),
-          eq(receiptSettings.storeId, DEFAULT_STORE_ID)
+          eq(receiptSettings.businessId, businessId),
+          eq(receiptSettings.storeId, storeId)
         )
       )
       .limit(1);
@@ -145,7 +148,7 @@ async function loadReceiptFooterSafe(): Promise<string | null> {
     try {
       const result = await db.execute(sql`
         select "Footer" as footer from "settings"."ReceiptSettings"
-        where "BusinessId" = ${DEFAULT_BUSINESS_ID}::uuid and "StoreId" = ${DEFAULT_STORE_ID}::uuid
+        where "BusinessId" = ${businessId}::uuid and "StoreId" = ${storeId}::uuid
         limit 1
       `);
       const row = (result as any)?.rows?.[0] ?? (Array.isArray(result) ? result[0] : null);
@@ -156,7 +159,11 @@ async function loadReceiptFooterSafe(): Promise<string | null> {
   }
 }
 
-export async function getBusinessData(query: BusinessQuery = {}): Promise<BusinessData> {
+export async function getBusinessData(
+  query: BusinessQuery = {},
+  businessId: string,
+  storeId: string = DEFAULT_STORE_ID
+): Promise<BusinessData> {
   const {
     page = 1,
     pageSize = 20,
@@ -172,7 +179,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
   const offset = (page - 1) * pageSize;
 
   const transactionFilters: any[] = [
-    eq(transactions.businessId, DEFAULT_BUSINESS_ID),
+    eq(transactions.businessId, businessId),
   ];
   if (search) {
     transactionFilters.push(
@@ -189,7 +196,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
   if (to) transactionFilters.push(lte(transactions.createdAt, new Date(to)));
 
   const productFilters: any[] = [
-    eq(products.businessId, DEFAULT_BUSINESS_ID),
+    eq(products.businessId, businessId),
   ];
   if (search) {
     productFilters.push(
@@ -204,7 +211,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
   if (status) productFilters.push(eq(products.status, status));
 
   const customerFilters: any[] = [
-    eq(customers.businessId, DEFAULT_BUSINESS_ID),
+    eq(customers.businessId, businessId),
   ];
   if (search) {
     customerFilters.push(
@@ -216,7 +223,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
     );
   }
 
-  const staffFilters: any[] = [eq(staff.businessId, DEFAULT_BUSINESS_ID)];
+  const staffFilters: any[] = [eq(staff.businessId, businessId)];
   if (search) {
     staffFilters.push(
       or(
@@ -241,7 +248,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
     db
       .select()
       .from(categories)
-      .where(eq(categories.businessId, DEFAULT_BUSINESS_ID)),
+      .where(eq(categories.businessId, businessId)),
     db
       .select()
       .from(products)
@@ -260,8 +267,8 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
       .where(and(...staffFilters))
       .limit(pageSize)
       .offset(offset),
-    loadBusinessSettingsSafe(),
-    loadReceiptFooterSafe(),
+    loadBusinessSettingsSafe(businessId),
+    loadReceiptFooterSafe(businessId, storeId),
     db
       .select()
       .from(transactions)
@@ -273,7 +280,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
     db
       .select()
       .from(stockMovements)
-      .where(eq(stockMovements.businessId, DEFAULT_BUSINESS_ID)),
+      .where(eq(stockMovements.businessId, businessId)),
   ]);
 
   const productIds = productRows.map((row) => row.id);
@@ -284,7 +291,7 @@ export async function getBusinessData(query: BusinessQuery = {}): Promise<Busine
           .from(inventory)
           .where(
             and(
-              eq(inventory.storeId, DEFAULT_STORE_ID),
+              eq(inventory.storeId, storeId),
               inArray(inventory.productId, productIds)
             )
           )
@@ -446,14 +453,14 @@ function requiredId(value: unknown, label: string): string {
 export async function mutateBusiness(
   action: string,
   payload: any,
-  actingUser: ActingUser = {}
+  actingUser: ActingUser & { businessId: string; storeId?: string } = { businessId: "" }
 ) {
-  const { actingUserId, actingUserRole: _actingUserRole } = actingUser;
+  const { actingUserId, actingUserRole: _actingUserRole, businessId, storeId = DEFAULT_STORE_ID } = actingUser;
   switch (action) {
     case "category.create": {
       await db.insert(categories).values({
         id: requiredId(payload.id, "ID kategori"),
-        businessId: DEFAULT_BUSINESS_ID,
+        businessId,
         name: String(payload.name ?? "").trim(),
         description: payload.description?.trim() || null,
         status: payload.status ?? "active",
@@ -491,6 +498,11 @@ export async function mutateBusiness(
     }
 
     case "product.create": {
+      const productCheck = await checkProductLimit(businessId);
+      if (!productCheck.allowed) {
+        throw new Error(productCheck.message || "Batas produk tercapai. Upgrade paket untuk menambah produk.");
+      }
+
       const id = requiredId(payload.id, "ID produk");
       const stock = Number(payload.stock ?? 0);
       const minStock = Number(payload.minStock ?? 0);
@@ -498,7 +510,7 @@ export async function mutateBusiness(
       await db.transaction(async (tx) => {
         await tx.insert(products).values({
           id,
-          businessId: DEFAULT_BUSINESS_ID,
+          businessId,
           name: String(payload.name ?? "").trim(),
           sku: String(payload.sku ?? "").trim().toUpperCase(),
           barcode: payload.barcode?.trim() || null,
@@ -513,7 +525,7 @@ export async function mutateBusiness(
           createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
           updatedAt: new Date(),
         });
-        await upsertInventory(tx, id, stock, minStock);
+        await upsertInventory(tx, businessId, storeId, id, stock, minStock);
       });
       return { ok: true };
     }
@@ -541,7 +553,7 @@ export async function mutateBusiness(
             updatedAt: new Date(),
           })
           .where(eq(products.id, id));
-        await upsertInventory(tx, id, stock, minStock);
+        await upsertInventory(tx, businessId, storeId, id, stock, minStock);
       });
       return { ok: true };
     }
@@ -583,7 +595,7 @@ export async function mutateBusiness(
     case "customer.create": {
       await db.insert(customers).values({
         id: requiredId(payload.id, "ID pelanggan"),
-        businessId: DEFAULT_BUSINESS_ID,
+        businessId,
         name: String(payload.name ?? "").trim(),
         phone: String(payload.phone ?? "").trim(),
         email: payload.email?.trim() || null,
@@ -616,10 +628,15 @@ export async function mutateBusiness(
     }
 
     case "staff.create": {
+      const userCheck = await checkUserLimit(businessId);
+      if (!userCheck.allowed) {
+        throw new Error(userCheck.message || "Batas pengguna tercapai. Upgrade paket untuk menambah pengguna.");
+      }
+
       await db.insert(staff).values({
         id: requiredId(payload.id, "ID staf"),
-        businessId: DEFAULT_BUSINESS_ID,
-        storeId: DEFAULT_STORE_ID,
+        businessId,
+        storeId,
         name: String(payload.name ?? "").trim(),
         email: String(payload.email ?? "").trim().toLowerCase(),
         role: payload.role ?? "cashier",
@@ -675,7 +692,7 @@ export async function mutateBusiness(
         const [product] = await tx
           .select()
           .from(products)
-          .where(eq(products.id, productId))
+          .where(and(eq(products.id, productId), eq(products.businessId, businessId)))
           .for("update")
           .limit(1);
         if (!product) throw new Error("Produk tidak ditemukan.");
@@ -686,7 +703,7 @@ export async function mutateBusiness(
           .where(
             and(
               eq(inventory.productId, productId),
-              eq(inventory.storeId, DEFAULT_STORE_ID)
+              eq(inventory.storeId, storeId)
             )
           )
           .for("update")
@@ -708,6 +725,8 @@ export async function mutateBusiness(
           .where(eq(products.id, productId));
         await upsertInventory(
           tx,
+          businessId,
+          storeId,
           productId,
           nextStock,
           inventoryRow?.minimumStock ?? product.minimumStock
@@ -716,8 +735,8 @@ export async function mutateBusiness(
         const movementId = payload.movementId ?? crypto.randomUUID();
         await tx.insert(stockMovements).values({
           id: movementId,
-          businessId: DEFAULT_BUSINESS_ID,
-          storeId: DEFAULT_STORE_ID,
+          businessId,
+          storeId,
           productId,
           productName: product.name,
           movementType: mode,
@@ -731,8 +750,8 @@ export async function mutateBusiness(
         });
 
         await tx.insert(stockAdjustments).values({
-          businessId: DEFAULT_BUSINESS_ID,
-          storeId: DEFAULT_STORE_ID,
+          businessId,
+          storeId,
           productId,
           adjustmentType:
             mode === "in" ? "increase" : mode === "out" ? "decrease" : "set",
@@ -754,7 +773,7 @@ export async function mutateBusiness(
         const [transaction] = await tx
           .select()
           .from(transactions)
-          .where(eq(transactions.id, id))
+          .where(and(eq(transactions.id, id), eq(transactions.businessId, businessId)))
           .for("update")
           .limit(1);
         if (!transaction) throw new Error("Transaksi tidak ditemukan.");
@@ -771,7 +790,7 @@ export async function mutateBusiness(
           const [product] = await tx
             .select()
             .from(products)
-            .where(eq(products.id, item.productId))
+            .where(and(eq(products.id, item.productId), eq(products.businessId, businessId)))
             .for("update")
             .limit(1);
           if (!product) continue;
@@ -782,7 +801,7 @@ export async function mutateBusiness(
             .where(
               and(
                 eq(inventory.productId, product.id),
-                eq(inventory.storeId, DEFAULT_STORE_ID)
+                eq(inventory.storeId, storeId)
               )
             )
             .for("update")
@@ -798,6 +817,8 @@ export async function mutateBusiness(
             .where(eq(products.id, product.id));
           await upsertInventory(
             tx,
+            businessId,
+            storeId,
             product.id,
             nextStock,
             inventoryRow?.minimumStock ?? product.minimumStock
@@ -805,8 +826,8 @@ export async function mutateBusiness(
 
           await tx.insert(stockMovements).values({
             id: crypto.randomUUID(),
-            businessId: DEFAULT_BUSINESS_ID,
-            storeId: DEFAULT_STORE_ID,
+            businessId,
+            storeId,
             productId: product.id,
             productName: product.name,
             movementType: "void",
@@ -831,6 +852,51 @@ export async function mutateBusiness(
           .where(eq(transactions.id, id));
       });
 
+      return { ok: true };
+    }
+
+    case "store.create": {
+      const storeCheck = await checkStoreLimit(businessId);
+      if (!storeCheck.allowed) {
+        throw new Error(storeCheck.message || "Batas toko tercapai. Upgrade paket untuk menambah toko.");
+      }
+
+      await db.insert(stores).values({
+        id: requiredId(payload.id, "ID toko"),
+        businessId,
+        name: String(payload.name ?? "").trim(),
+        code: String(payload.code ?? "").trim().toUpperCase(),
+        address: payload.address?.trim() || null,
+        phone: payload.phone?.trim() || null,
+        email: payload.email?.trim() || null,
+        timezone: payload.timezone ?? "Asia/Jakarta",
+        isActive: true,
+        createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+        updatedAt: new Date(),
+      });
+      return { ok: true };
+    }
+
+    case "store.update": {
+      await db
+        .update(stores)
+        .set({
+          name: String(payload.name ?? "").trim(),
+          code: String(payload.code ?? "").trim().toUpperCase(),
+          address: payload.address?.trim() || null,
+          phone: payload.phone?.trim() || null,
+          email: payload.email?.trim() || null,
+          timezone: payload.timezone ?? "Asia/Jakarta",
+          isActive: payload.isActive ?? true,
+          updatedAt: new Date(),
+        })
+        .where(eq(stores.id, requiredId(payload.id, "ID toko")));
+      return { ok: true };
+    }
+
+    case "store.delete": {
+      const id = requiredId(payload.id, "ID toko");
+      await db.delete(stores).where(eq(stores.id, id));
       return { ok: true };
     }
 

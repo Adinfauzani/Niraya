@@ -10,6 +10,7 @@ import {
   ACTION_ROLES,
 } from "@/server/auth/session";
 import { createSeedData } from "@/lib/business-seed";
+import { getBusinessContext } from "@/server/auth/business-context";
 
 async function requireSession() {
   const cookieStore = await cookies();
@@ -25,6 +26,32 @@ async function requireSession() {
   if (user?.id) await ensureUserProfile(user);
 
   return user;
+}
+
+async function requireBusinessContext() {
+  const cookieStore = await cookies();
+  const demo = cookieStore.get("niraya_demo")?.value;
+  if (demo === "1") {
+    return { businessId: "00000000-0000-0000-0000-000000000001", storeId: "00000000-0000-0000-0000-000000000002" };
+  }
+  
+  const session = await getSession();
+  const user =
+    (session as any)?.user ?? (session as any)?.data?.user ?? null;
+
+  if (!user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const context = await getBusinessContext(user.id);
+  if (!context) {
+    throw new Error("No active business membership found");
+  }
+
+  return {
+    businessId: context.businessId,
+    storeId: context.storeId ?? "00000000-0000-0000-0000-000000000002",
+  };
 }
 
 const BusinessQuerySchema = z.object({
@@ -51,6 +78,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { businessId, storeId } = await requireBusinessContext();
+
+  const resolvedBusinessId = businessId!;
+  const resolvedStoreId = storeId!;
+
   try {
     const { searchParams } = new URL(request.url);
     const parsed = BusinessQuerySchema.safeParse({
@@ -72,7 +104,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const data = await getBusinessData(parsed.data);
+    const data = await getBusinessData(parsed.data, resolvedBusinessId, resolvedStoreId);
     return NextResponse.json(data);
   } catch (error: unknown) {
     const err = error as any;
@@ -98,6 +130,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { businessId, storeId } = await requireBusinessContext();
+
+  const resolvedBusinessId = businessId!;
+  const resolvedStoreId = storeId!;
+
   try {
     const body = await request.json();
     const action = String(body?.action ?? "");
@@ -121,6 +158,8 @@ export async function POST(request: Request) {
     const result = await mutateBusiness(action, body?.payload ?? {}, {
       actingUserId: user.id,
       actingUserRole: await getCurrentUserRole(),
+      businessId: resolvedBusinessId,
+      storeId: resolvedStoreId,
     });
     return NextResponse.json(result);
   } catch (error: unknown) {
