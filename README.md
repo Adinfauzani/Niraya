@@ -1,79 +1,139 @@
 # Niraya POS
 
-Point of Sale (POS) web app built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4/shadcn**, **Drizzle ORM**, and **Neon Postgres + Neon Auth**.
+![Niraya POS](public/og.png)
+
+Point of Sale (POS) web application built with **Next.js 16**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **shadcn/ui**, **Drizzle ORM**, **Supabase Postgres**, and **Supabase Auth**.
 
 ## Stack
-- App: Next.js 16, React 19, TypeScript (strict), path alias `@/*` → `src/*`
-- Package manager/runtime: **Bun** (lockfile `bun.lock`)
-- Styling/UI: Tailwind CSS v4, shadcn/ui (`src/components/ui`)
-- Lint/format: oxlint (`bun lint`), ESLint config for Next
-- Database: Drizzle ORM + `pg` (schemas in `src/server/db/schema`, migrations in `drizzle/`)
-- Auth: `@neon/auth` (server + middleware), route protection via `src/proxy.ts`
 
-## Prerequisites
-- Bun 1.3+ (project uses Bun scripts)
-- A Neon project with Postgres and Neon Auth enabled
+- **Framework**: Next.js 16 (App Router), React 19, TypeScript (strict)
+- **Runtime**: Bun
+- **Styling**: Tailwind CSS v4, shadcn/ui
+- **Database**: Drizzle ORM + Supabase Postgres (transaction pooler)
+- **Auth**: Supabase Auth (Google OAuth, email/password, magic links)
+- **Billing**: Gumroad (subscription webhook)
+- **Rate limiting**: Upstash Redis (optional)
 
-## Setup
-1. Install dependencies:
-   ```bash
-   bun install
-   ```
-2. Copy env template and fill values (local only, do not commit `.env`):
-   ```bash
-   cp .env.example .env
-   ```
-3. Start the dev server:
-   ```bash
-   bun dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000).
+## Quick Start
+
+```bash
+# Install dependencies
+bun install
+
+# Copy environment template
+cp .env.example .env
+
+# Fill in .env with your credentials (see below)
+
+# Run development server
+bun dev
+```
+
+Open http://localhost:3000
 
 ## Environment Variables
-Set locally in `.env` and in Vercel **Project Settings → Environment Variables** (Production/Preview as needed). Do **not** use `NEXT_PUBLIC_` for server secrets.
 
-| Variable | Where | Required | Notes |
-|---|---|---:|---|
-| `NODE_ENV` | server | yes | `development` / `production` |
-| `NEXT_PUBLIC_APP_URL` | client | yes | e.g. `http://localhost:3000` or deployed URL |
-| `DATABASE_URL` | server | yes | Neon Postgres connection string |
-| `NEON_AUTH_BASE_URL` | server | yes | Neon Auth base URL |
-| `NEON_AUTH_JWKS_URL` | server | yes | Neon Auth JWKS URL |
-| `NEON_AUTH_COOKIE_SECRET` | server | yes | **Create your own random secret** (not from Neon dashboard), e.g. `openssl rand -base64 32` or `bun -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
-| `NEXT_PUBLIC_NEON_AUTH_URL` | client | yes | Neon Auth public URL |
-| `DATABASE_URL_UNPOOLED` | server | optional | Not used by current app code |
-| `NEON_BRANCH`, `PORT`, `VITE_APP_NAME`, `FREEMIUS_*` | — | no | Not used by current app code / optional |
+| Variable | Required | Description |
+|---|---|---|
+| `NODE_ENV` | Yes | `development` or `production` |
+| `NEXT_PUBLIC_APP_URL` | Yes | App URL (e.g. `http://localhost:3000`) |
+| `DATABASE_URL` | Yes | Supabase Postgres connection string (pooler port 6543) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Supabase anon/public key |
+| `SUPABASE_URL` | Yes | Supabase project URL (server) |
+| `SUPABASE_SECRET_KEY` | Yes | Supabase service role key |
+| `SUPABASE_JWKS_URL` | Yes | Supabase JWKS endpoint |
+| `GUMROAD_SELLER_ID` | No | Gumroad seller ID |
+| `GUMROAD_ACCESS_TOKEN` | No | Gumroad API access token |
+| `GUMROAD_PRODUCT_STARTER` | No | Gumroad product ID (Starter plan) |
+| `GUMROAD_PRODUCT_PLUS` | No | Gumroad product ID (Plus plan) |
+| `GUMROAD_PRODUCT_PRO` | No | Gumroad product ID (Pro plan) |
+| `GUMROAD_VERIFY_WEBHOOK` | No | Verify webhook signatures (`true`/`false`) |
+| `UPSTASH_REDIS_REST_URL` | No | Upstash Redis REST URL (rate limiting) |
+| `UPSTASH_REDIS_REST_TOKEN` | No | Upstash Redis REST token |
 
 ## Scripts
+
 ```bash
-bun dev          # Next dev server
+bun dev          # Development server
 bun build        # Production build
 bun start        # Start production server
 bun lint         # oxlint
-bun run typecheck # tsc --noEmit
-bun test         # bun test
+bun run typecheck # TypeScript check
+bun test         # Run tests
 
-bun db:generate  # drizzle-kit generate
-bun db:migrate   # drizzle-kit migrate
-bun db:push      # drizzle-kit push
-bun db:seed      # seed business/demo data
-bun db:studio    # drizzle-kit studio
+bun db:generate  # Generate Drizzle migrations
+bun db:migrate   # Run migrations
+bun db:push      # Push schema (dev only)
+bun db:seed      # Seed business data
+bun db:studio    # Drizzle Studio
 ```
 
-## Database & Auth Notes
-- Drizzle schema lives in `src/server/db/schema/` and outputs migrations to `drizzle/`. Review migrations before applying to shared/production databases.
-- Neon Auth tables (`neon_auth`) are managed by Neon — avoid modifying them via app migrations.
-- RBAC/profile data is stored in app tables (e.g. `core.UserProfiles`, `core.Roles`). After a DB reset, ensure required roles/permissions are seeded and user profiles are re-established on login as needed.
+## Features
 
-## Deploy (Vercel)
-1. Push to the connected branch (e.g. `master`).
-2. Configure all required Environment Variables in Vercel.
-3. Set `NEON_AUTH_COOKIE_SECRET` to a strong random value (same key name; rotate carefully — existing sessions may be invalidated).
-4. Deploy. If the build fails on typecheck, ensure test files aren’t included in production TS checks and route files export valid route modules.
+- **POS Checkout**: Transaction-safe with advisory locks, server-side pricing/tax/stock validation, idempotency
+- **QR Ordering**: Table/QR code ordering with guest checkout
+- **Inventory**: Stock management, reservations, adjustments
+- **Multi-tenant**: Businesses, stores, staff roles (owner, admin, manager, cashier, user)
+- **Onboarding**: 6-step wizard for new businesses
+- **Billing**: Gumroad subscription sync via webhook
+- **Auth**: Supabase Auth with Google OAuth, email verification, password reset
 
-## Project Layout (high level)
-- `src/app/` — App Router routes (dashboard, profile, auth, API)
-- `src/components/` — shared UI/components
-- `src/features/` — feature modules
-- `src/server/` — auth, db, repositories/services/business logic
-- `src/lib/`, `src/hooks/`, `src/stores/`, `src/shared/`, `src/types/`
+## Project Structure
+
+```
+src/
+├── app/              # App Router pages & API routes
+├── components/       # Shared UI components
+├── features/         # Feature modules (POS, inventory, staff, etc.)
+├── server/           # Auth, DB, services, repositories
+├── lib/              # Utilities, Supabase clients
+└── hooks/            # React hooks
+```
+
+## Database Schema
+
+13 domain schemas in `drizzle/schema/` (concatenated in `drizzle/init.sql`):
+
+- `core` — Roles, businesses, stores, user profiles, business members
+- `products` — Categories, products, variants
+- `inventory` — Stock levels, movements, reservations
+- `customers` — Customer profiles
+- `staff` — Operational staff
+- `suppliers` — Supplier management
+- `purchases` — Purchase orders
+- `transactions` — Sales transactions
+- `payments` — Payment records, proofs
+- `lookups` — Reference data (business categories, etc.)
+- `settings` — Business settings (9 tables)
+- `audit` — Audit logs
+- `platform` — SaaS plans, subscriptions, webhook events
+
+User profiles (`core.UserProfiles`) use UUID primary key matching `auth.users.id` with FK and RLS policies.
+
+## Deploy
+
+### Vercel (Personal Account)
+
+1. Push to GitHub (personal account repo)
+2. Import in Vercel
+3. Add all environment variables
+4. Deploy
+
+### Supabase Setup
+
+1. Create project at supabase.com
+2. Enable Google OAuth in Authentication → Providers
+3. Add redirect URLs: `https://your-domain.com/auth/callback`, `https://your-domain.com/verify`
+4. Configure email templates (confirm signup, reset password)
+5. Run `drizzle/init.sql` in SQL Editor (or `bun db:push`)
+
+### Gumroad Webhook
+
+Add webhook endpoint: `https://your-domain.com/api/webhooks/gumroad`
+
+Events: `subscription_created`, `subscription_cancelled`, `subscription_updated`, `sale_completed`
+
+## License
+
+MIT
