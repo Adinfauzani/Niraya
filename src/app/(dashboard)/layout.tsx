@@ -16,14 +16,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [checkingOnboarding, setCheckingOnboarding] = useState(true)
 
-  useEffect(() => {
-    if (!role) return
-    if (role === "user" && pathname !== "/profile") {
-      router.replace("/profile")
-    }
-  }, [role, pathname, router])
-
-  // Check onboarding status
+  // Check onboarding status first
   useEffect(() => {
     if (!role || pathname.startsWith("/onboarding")) {
       setCheckingOnboarding(false)
@@ -36,6 +29,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           const data = await res.json()
           if (data.needsOnboarding) {
             setShowOnboarding(true)
+          } else if (role === "user" && pathname !== "/profile") {
+            // Onboarding done but role is still "user" -> go to profile
+            router.replace("/profile")
           }
         }
       } catch {
@@ -45,7 +41,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     }
     checkOnboarding()
-  }, [role, pathname])
+  }, [role, pathname, router])
+
+  // Also redirect if role changes to "user" after onboarding check
+  useEffect(() => {
+    if (!role || showOnboarding || pathname === "/profile" || pathname.startsWith("/onboarding")) return
+    if (role === "user") {
+      router.replace("/profile")
+    }
+  }, [role, pathname, router, showOnboarding])
 
   if (checkingOnboarding) {
     return <DashboardLayout>{children}</DashboardLayout>
