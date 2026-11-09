@@ -50,6 +50,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Root path - redirect authenticated users to onboarding/dashboard
+  if (request.nextUrl.pathname === "/" && user) {
+    return NextResponse.redirect(new URL("/onboarding", request.url));
+  }
+
   // Auth routes - redirect to onboarding if already logged in
   // Onboarding page will check if completed and redirect to dashboard
   const authPaths = ["/login", "/signup", "/register", "/forgot-password", "/reset-password", "/auth/callback"];
