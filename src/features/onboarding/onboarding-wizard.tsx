@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { OnboardingLayout } from "@/components/onboarding/onboarding-layout"
 
 const STEPS = [
   { id: 1, title: "One", icon: Building2Icon, description: "Nama, alamat, kontak, kategori usaha" },
@@ -710,35 +711,7 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Setup Usaha Pertama</h1>
-        <p className="text-muted-foreground">Ikuti langkah-langkah di bawah untuk menyiapkan usaha Anda</p>
-      </div>
-
-      <nav className="flex items-center justify-center gap-2 overflow-x-auto pb-4" aria-label="Onboarding steps">
-        {STEPS.map((step, index) => (
-          <div key={step.id} className="flex items-center">
-            <div className={cn(
-              "flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium transition-colors",
-              currentStep > step.id
-                ? "bg-green-500 text-white"
-                : currentStep === step.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground"
-            )}>
-              {currentStep > step.id ? <CheckIcon className="w-5 h-5" /> : <step.icon className="w-5 h-5" />}
-            </div>
-            {index < STEPS.length - 1 && (
-              <div className={cn(
-                "w-16 h-0.5 mx-2",
-                currentStep > step.id + 1 ? "bg-green-500" : "bg-muted"
-              )} />
-            )}
-          </div>
-        ))}
-      </nav>
-
+    <OnboardingLayout currentStep={currentStep} totalSteps={STEPS.length}>
       <div className="space-y-4">
         <div className="text-sm text-muted-foreground text-center">
           Langkah {currentStep} dari {STEPS.length}: {STEPS[currentStep - 1].title}
@@ -780,6 +753,6 @@ export function OnboardingWizard() {
           )}
         </Button>
       </div>
-    </div>
+    </OnboardingLayout>
   )
 }
