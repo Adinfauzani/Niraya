@@ -19,5 +19,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [role, pathname, router])
 
+  // Check onboarding status
+  useEffect(() => {
+    if (!role || pathname.startsWith("/onboarding")) return
+    const checkOnboarding = async () => {
+      try {
+        const res = await fetch("/api/onboarding/status")
+        if (res.ok) {
+          const data = await res.json()
+          if (data.needsOnboarding) {
+            router.replace("/onboarding")
+          }
+        }
+      } catch {
+        // Silently fail - let middleware handle auth
+      }
+    }
+    checkOnboarding()
+  }, [role, pathname, router])
+
   return <DashboardLayout>{children}</DashboardLayout>
 }
