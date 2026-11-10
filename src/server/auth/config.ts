@@ -8,8 +8,9 @@ import * as authSchema from "@/server/db/schema/auth";
  * Centralized Better Auth configuration.
  *
  * - Drizzle adapter against Supabase PostgreSQL (existing connection).
- * - Auth tables live in a dedicated `auth` schema, separate from the 13
- *   business domain schemas.
+ * - Auth tables live in the `core` schema alongside the app tables
+ *   (no separate `auth` schema — Supabase's built-in `auth` schema is
+ *   reserved for Supabase Auth and is not writable by the app role).
  * - Google + GitHub OAuth enabled.
  * - Email/password, email verification, and password reset are built-in.
  * - Secret comes from `BETTER_AUTH_SECRET` env var.

@@ -1,16 +1,15 @@
 -- 0006_auth_schema.sql
 -- Better Auth 1.7.x database schema.
--- Tables live in the dedicated `auth` schema, separate from the 13
--- business domain schemas.
+-- Tables live in the `core` schema alongside the app tables (no separate
+-- `auth` schema — Supabase's built-in `auth` schema is reserved for
+-- Supabase Auth and is not writable by the app role).
 --
 -- This migration is additive and idempotent (IF NOT EXISTS).
 -- Apply manually on a dev branch; `bun db:migrate` will not replay it
 -- because `drizzle/meta/_journal.json` only knows 0000.
 
-CREATE SCHEMA IF NOT EXISTS "auth";
-
 -- Better Auth `user` table
-CREATE TABLE IF NOT EXISTS "auth"."user" (
+CREATE TABLE IF NOT EXISTS "core"."AuthUser" (
     "id" varchar(36) PRIMARY KEY,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -24,7 +23,7 @@ CREATE TABLE IF NOT EXISTS "auth"."user" (
 );
 
 -- Better Auth `session` table
-CREATE TABLE IF NOT EXISTS "auth"."session" (
+CREATE TABLE IF NOT EXISTS "core"."AuthSession" (
     "id" varchar(36) PRIMARY KEY,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -36,7 +35,7 @@ CREATE TABLE IF NOT EXISTS "auth"."session" (
 );
 
 -- Better Auth `account` table (OAuth + password credentials)
-CREATE TABLE IF NOT EXISTS "auth"."account" (
+CREATE TABLE IF NOT EXISTS "core"."AuthAccount" (
     "id" varchar(36) PRIMARY KEY,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -53,7 +52,7 @@ CREATE TABLE IF NOT EXISTS "auth"."account" (
 );
 
 -- Better Auth `verification` table (email verification, password reset)
-CREATE TABLE IF NOT EXISTS "auth"."verification" (
+CREATE TABLE IF NOT EXISTS "core"."AuthVerification" (
     "id" varchar(36) PRIMARY KEY,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -63,8 +62,8 @@ CREATE TABLE IF NOT EXISTS "auth"."verification" (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS "auth_session_user_id_idx" ON "auth"."session" ("user_id");
-CREATE INDEX IF NOT EXISTS "auth_account_user_id_idx" ON "auth"."account" ("user_id");
-CREATE INDEX IF NOT EXISTS "auth_account_provider_idx" ON "auth"."account" ("provider_id", "account_id");
-CREATE INDEX IF NOT EXISTS "auth_verification_identifier_idx" ON "auth"."verification" ("identifier");
-CREATE INDEX IF NOT EXISTS "auth_user_legacy_supabase_idx" ON "auth"."user" ("legacy_supabase_user_id");
+CREATE INDEX IF NOT EXISTS "AuthSession_user_id_idx" ON "core"."AuthSession" ("user_id");
+CREATE INDEX IF NOT EXISTS "AuthAccount_user_id_idx" ON "core"."AuthAccount" ("user_id");
+CREATE INDEX IF NOT EXISTS "AuthAccount_provider_idx" ON "core"."AuthAccount" ("provider_id", "account_id");
+CREATE INDEX IF NOT EXISTS "AuthVerification_identifier_idx" ON "core"."AuthVerification" ("identifier");
+CREATE INDEX IF NOT EXISTS "AuthUser_legacy_supabase_idx" ON "core"."AuthUser" ("legacy_supabase_user_id");

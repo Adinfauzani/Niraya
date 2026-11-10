@@ -283,3 +283,60 @@ CREATE POLICY "dining_tables_update_manager" ON "core"."DiningTables"
     FOR UPDATE TO authenticated
     USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
     WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
+
+-- Better Auth tables (live in `core` schema alongside app tables;
+-- no separate `auth` schema — Supabase's built-in `auth` schema is reserved
+-- for Supabase Auth and is not writable by the app role).
+
+CREATE TABLE IF NOT EXISTS "core"."AuthUser" (
+    "id" varchar(36) PRIMARY KEY,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "email" text NOT NULL UNIQUE,
+    "email_verified" boolean DEFAULT false NOT NULL,
+    "name" text NOT NULL,
+    "image" text,
+    "legacy_supabase_user_id" text
+);
+
+CREATE TABLE IF NOT EXISTS "core"."AuthSession" (
+    "id" varchar(36) PRIMARY KEY,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "user_id" varchar(36) NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    "token" text NOT NULL UNIQUE,
+    "ip_address" text,
+    "user_agent" text
+);
+
+CREATE TABLE IF NOT EXISTS "core"."AuthAccount" (
+    "id" varchar(36) PRIMARY KEY,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "provider_id" text NOT NULL,
+    "account_id" text NOT NULL,
+    "user_id" varchar(36) NOT NULL,
+    "access_token" text,
+    "refresh_token" text,
+    "id_token" text,
+    "access_token_expires_at" timestamp with time zone,
+    "refresh_token_expires_at" timestamp with time zone,
+    "scope" text,
+    "password" text
+);
+
+CREATE TABLE IF NOT EXISTS "core"."AuthVerification" (
+    "id" varchar(36) PRIMARY KEY,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "value" text NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    "identifier" text NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "AuthSession_user_id_idx" ON "core"."AuthSession" ("user_id");
+CREATE INDEX IF NOT EXISTS "AuthAccount_user_id_idx" ON "core"."AuthAccount" ("user_id");
+CREATE INDEX IF NOT EXISTS "AuthAccount_provider_idx" ON "core"."AuthAccount" ("provider_id", "account_id");
+CREATE INDEX IF NOT EXISTS "AuthVerification_identifier_idx" ON "core"."AuthVerification" ("identifier");
+CREATE INDEX IF NOT EXISTS "AuthUser_legacy_supabase_idx" ON "core"."AuthUser" ("legacy_supabase_user_id");

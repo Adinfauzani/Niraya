@@ -19,8 +19,10 @@ Apply in dependency order:
 12. `settings.sql`
 13. `platform.sql`
 
-`demo` is declared in `src/server/db/schema/schema.ts` but currently has no
-tables, so no `demo.sql` is provided.
+`core.sql` also includes the Better Auth tables (`AuthUser`, `AuthSession`,
+`AuthAccount`, `AuthVerification`) alongside the app tables. There is no
+separate `auth` schema — Supabase's built-in `auth` schema is reserved for
+Supabase Auth and is not writable by the app role.
 
 `platform.sql` depends on `core.sql` (`platform.Subscriptions.BusinessId`).
 It is applied last because it has no dependents. Gumroad stays the billing
