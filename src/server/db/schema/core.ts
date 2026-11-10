@@ -229,7 +229,9 @@ export const businessMembers = core.table(
  * (`camelCase: false` in the adapter config).
  */
 export const authUser = core.table("AuthUser", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 36 })
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -246,7 +248,9 @@ export const authUser = core.table("AuthUser", {
 });
 
 export const authSession = core.table("AuthSession", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 36 })
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -261,7 +265,9 @@ export const authSession = core.table("AuthSession", {
 });
 
 export const authAccount = core.table("AuthAccount", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 36 })
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -285,7 +291,9 @@ export const authAccount = core.table("AuthAccount", {
 });
 
 export const authVerification = core.table("AuthVerification", {
-  id: varchar("id", { length: 36 }).primaryKey(),
+  id: varchar("id", { length: 36 })
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

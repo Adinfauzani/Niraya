@@ -10,7 +10,7 @@
 
 -- Better Auth `user` table
 CREATE TABLE IF NOT EXISTS "core"."AuthUser" (
-    "id" varchar(36) PRIMARY KEY,
+    "id" varchar(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
     "email" text NOT NULL UNIQUE,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS "core"."AuthUser" (
 
 -- Better Auth `session` table
 CREATE TABLE IF NOT EXISTS "core"."AuthSession" (
-    "id" varchar(36) PRIMARY KEY,
+    "id" varchar(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
     "user_id" varchar(36) NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS "core"."AuthSession" (
 
 -- Better Auth `account` table (OAuth + password credentials)
 CREATE TABLE IF NOT EXISTS "core"."AuthAccount" (
-    "id" varchar(36) PRIMARY KEY,
+    "id" varchar(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
     "provider_id" text NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS "core"."AuthAccount" (
 
 -- Better Auth `verification` table (email verification, password reset)
 CREATE TABLE IF NOT EXISTS "core"."AuthVerification" (
-    "id" varchar(36) PRIMARY KEY,
+    "id" varchar(36) PRIMARY KEY DEFAULT gen_random_uuid(),
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
     "value" text NOT NULL,
