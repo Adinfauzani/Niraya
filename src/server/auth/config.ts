@@ -15,13 +15,27 @@ import * as authSchema from "@/server/db/schema/auth";
  * - Email/password, email verification, and password reset are built-in.
  * - Secret comes from `BETTER_AUTH_SECRET` env var.
  */
+
+// Dash plugin (optional — only loaded when BETTER_AUTH_API_KEY is set).
+// Get your API key at https://better-auth.com/dashboard
+const plugins: any[] = [];
+if (process.env.BETTER_AUTH_API_KEY) {
+  const { dash } = require("@better-auth/infra") as any;
+  plugins.push(
+    dash({
+      apiKey: process.env.BETTER_AUTH_API_KEY,
+    })
+  );
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: authSchema,
     camelCase: false,
-    transaction: false, // Supabase pooler (port 6543) doesn't support prepared statements
+    transaction: false,
   }),
+  plugins,
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -48,8 +62,6 @@ export const auth = betterAuth({
   },
   user: {
     additionalFields: {
-      // Legacy Supabase user ID for identity mapping (nullable).
-      // Set during migration tooling; null for new users.
       legacySupabaseUserId: {
         type: "string",
         required: false,
