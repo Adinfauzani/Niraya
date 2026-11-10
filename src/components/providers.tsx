@@ -4,9 +4,9 @@ import { useEffect } from "react"
 
 import { QueryClientProvider } from "@tanstack/react-query"
 
-import { queryClient } from "@/lib/query-client"
-import { useBusinessQuery } from "@/hooks/use-business"
-import { useBusinessStore } from "@/stores/business-store"
+import { queryClient } from "@/lib/queryClient"
+import { useBusinessQuery } from "@/hooks/useBusiness"
+import { useBusinessStore } from "@/stores/businessStore"
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

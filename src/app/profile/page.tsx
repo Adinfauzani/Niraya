@@ -1,4 +1,4 @@
-import { ProfilePage } from "@/features/settings/profile-page";
+import { ProfilePage } from "@/features/settings/ProfilePage";
 
 export default function Page() {
   return <ProfilePage />;

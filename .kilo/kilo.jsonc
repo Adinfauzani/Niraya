@@ -26,13 +26,12 @@
   },
   "model": "ninerouter/FullMalas",
   "mcp": {
-    "Neon": {
-      "type": "remote",
-      "url": "https://mcp.neon.tech/mcp",
+    "supabase": {
+      "type": "http",
+      "url": "https://supabase.com",
       "headers": {
-        "Authorization": "Bearer napi_usqxjd7b7k6dn5zz6spzr1e2zpq306ch7s6hqt9nru3ms1jlrpa572nus5roip8o"
-      },
-      "enabled": true
+        "Authorization": "Bearer TOKEN_AKSES_SUPABASE_ANDA"
+      }
     }
   }
 }

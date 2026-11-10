@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPublicStorefrontCatalog } from "@/server/storefront/catalog";
-import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/rate-limit";
+import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/RateLimit";
 
 export async function GET(request: Request) {
   const ip = getClientIp(request); const rl = await rateLimitAsync(`storefront:catalog:${ip}`, { limit: 90, windowMs: 60_000 });

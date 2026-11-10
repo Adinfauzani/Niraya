@@ -116,7 +116,7 @@ export async function DELETE(request: Request) {
       if (owners.length <= 1) return NextResponse.json({ error: "Tidak dapat menghapus owner terakhir." }, { status: 400 });
     }
 
-    // Delete app profile row only (Neon Auth account untouched). User can receive a fresh default profile on next login.
+    // Delete app profile row only (auth account untouched). User can receive a fresh default profile on next login.
     await db.delete(userProfiles).where(and(eq(userProfiles.id, userId), isNull(userProfiles.deletedAt)));
     return NextResponse.json({ ok: true });
   } catch (e: any) {

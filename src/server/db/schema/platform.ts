@@ -158,3 +158,25 @@ export const webhookEvents = platform.table(
     ),
   ]
 );
+
+/**
+ * Platform-wide maintenance configuration.
+ * Single row (id="default") controls maintenance mode for entire platform.
+ */
+export const maintenanceConfig = platform.table(
+  "MaintenanceConfig",
+  {
+    id: text("Id").primaryKey().default("default"),
+    enabled: boolean("Enabled").notNull().default(false),
+    message: text("Message"),
+    startedAt: timestamp("StartedAt", { withTimezone: true }),
+    estimatedEndAt: timestamp("EstimatedEndAt", { withTimezone: true }),
+    createdAt: timestamp("CreatedAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("UpdatedAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => []
+);

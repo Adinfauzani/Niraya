@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { PlansPage } from "@/features/plans/plans-page"
+import { PlansPage } from "@/features/plans/PlansPage"
 
 // oxlint-disable-next-line react/only-export-components -- Next.js route metadata belongs here.
 export const metadata: Metadata = {

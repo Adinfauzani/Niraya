@@ -16,7 +16,6 @@ import {
   businessSettings,
   categories,
   customers,
-  DEFAULT_STORE_ID,
   inventory,
   products,
   receiptSettings,
@@ -162,7 +161,7 @@ async function loadReceiptFooterSafe(businessId: string, storeId: string): Promi
 export async function getBusinessData(
   query: BusinessQuery = {},
   businessId: string,
-  storeId: string = DEFAULT_STORE_ID
+  storeId: string
 ): Promise<BusinessData> {
   const {
     page = 1,
@@ -455,7 +454,10 @@ export async function mutateBusiness(
   payload: any,
   actingUser: ActingUser & { businessId: string; storeId?: string } = { businessId: "" }
 ) {
-  const { actingUserId, actingUserRole: _actingUserRole, businessId, storeId = DEFAULT_STORE_ID } = actingUser;
+  const { actingUserId, actingUserRole: _actingUserRole, businessId, storeId } = actingUser;
+  if (!storeId) {
+    throw new Error("Store ID tidak ditemukan dalam konteks bisnis.");
+  }
   switch (action) {
     case "category.create": {
       await db.insert(categories).values({

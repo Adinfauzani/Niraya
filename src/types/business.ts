@@ -147,3 +147,26 @@ export type CompletedSale = {
   cashReceived?: number
   change?: number
 }
+
+export type BusinessQuery = {
+  page?: number
+  pageSize?: number
+  search?: string
+  categoryId?: string
+  status?: string
+  stockFilter?: string
+  payment?: string
+  from?: string
+  to?: string
+}
+
+export type BusinessData = {
+  categories: Category[]
+  products: Product[]
+  customers: Customer[]
+  staff: Staff[]
+  transactions: Transaction[]
+  movements: StockMovement[]
+  settings: BusinessSettings | null
+  settingsState: "ready" | "uninitialized"
+}

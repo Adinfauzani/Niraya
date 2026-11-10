@@ -1,7 +1,7 @@
 import Image from "next/image"
 import Link from "next/link"
 
-import { ThemeToggle } from "@/components/shared/theme-toggle"
+import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import { Logo } from "@/components/ui/logo"
 
 export default function AuthLayout({

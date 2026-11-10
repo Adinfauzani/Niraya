@@ -2,8 +2,7 @@ import crypto from "crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
-  DEFAULT_BUSINESS_ID,
-  DEFAULT_STORE_ID,
+  businesses,
   inventory,
   reservations,
   orders,
@@ -11,10 +10,19 @@ import {
   orderStatusHistory,
   payments,
   products,
+  stores,
   stockMovements,
   transactionItems,
   transactions,
 } from "@/server/db/schema";
+
+async function loadDefaultBusinessAndStore(tx: any): Promise<{ businessId: string; storeId: string }> {
+  const [business] = await tx.select({ id: businesses.id }).from(businesses).where(eq(businesses.status, "active")).limit(1);
+  if (!business) throw Object.assign(new Error("Tidak ada bisnis aktif."), { status: 503 });
+  const [store] = await tx.select({ id: stores.id }).from(stores).where(and(eq(stores.businessId, business.id), eq(stores.isActive, true))).limit(1);
+  if (!store) throw Object.assign(new Error("Tidak ada toko aktif."), { status: 503 });
+  return { businessId: business.id, storeId: store.id };
+}
 
 /** Payment proof/verification primitives for storefront/legacy orders. */
 
@@ -56,9 +64,10 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
     const txId = pay.transactionId && String(pay.status).toUpperCase() === "COMPLETED" ? String(pay.transactionId) : crypto.randomUUID();
     const txNum = `TRX-SF-${Date.now().toString(36).toUpperCase()}`;
     const orderRowItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadDefaultBusinessAndStore(tx);
     if (!pay.transactionId) {
       await tx.insert(transactions).values({
-        id: txId, businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, transactionNumber: txNum,
+        id: txId, businessId: defaultBusinessId, storeId: defaultStoreId, transactionNumber: txNum,
         paymentMethod: "manual_transfer", paymentStatus: "paid", orderStatus: "completed",
         customerId: order.customerId, customerName: order.customerName,
         subtotal: Number(order.subtotal).toFixed(2), discountTotal: Number(order.discountTotal).toFixed(2),
@@ -74,7 +83,7 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
     }
     const resRows = await tx.select().from(reservations).where(and(eq(reservations.orderId, order.id), eq(reservations.status, "RESERVED")));
     for (const r of resRows) {
-      const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, r.productId), eq(inventory.storeId, DEFAULT_STORE_ID))).limit(1).for("update");
+      const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, r.productId), eq(inventory.storeId, defaultStoreId))).limit(1).for("update");
       if (inv) {
         const nextReserved = Math.max(0, (inv.reservedQuantity ?? 0) - r.quantity);
         const nextOnHand = Math.max(0, (inv.stockQuantity ?? 0) - r.quantity);
@@ -82,7 +91,7 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
         await tx.update(products).set({ stockQuantity: nextOnHand, updatedAt: now } as any).where(eq(products.id, r.productId));
       }
       await tx.update(reservations).set({ status: "CONVERTED", convertedAt: now, updatedAt: now } as any).where(eq(reservations.id, r.id));
-      await tx.insert(stockMovements).values({ id: crypto.randomUUID(), businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, productId: r.productId, quantityChange: -r.quantity, movementType: "sale", referenceType: "storefront_order_payment", referenceId: order.id, notes: `Paid storefront order ${order.orderNumber}`, performedByUserId: input.actorUserId, createdAt: now } as any);
+      await tx.insert(stockMovements).values({ id: crypto.randomUUID(), businessId: defaultBusinessId, storeId: defaultStoreId, productId: r.productId, quantityChange: -r.quantity, movementType: "sale", referenceType: "storefront_order_payment", referenceId: order.id, notes: `Paid storefront order ${order.orderNumber}`, performedByUserId: input.actorUserId, createdAt: now } as any);
     }
     await tx.update(payments).set({ status: "COMPLETED", transactionId: txId, paidAt: now, verifiedAt: now, verifiedByUserId: input.actorUserId, rejectionReason: null } as any).where(eq(payments.id, pay.id));
     await tx.update(orders).set({ paymentStatus: "PAID", paidAt: now, linkedTransactionId: txId, updatedAt: now } as any).where(eq(orders.id, order.id));
@@ -101,7 +110,8 @@ export async function expireReservations() {
       const [cur] = await tx.select().from(reservations).where(eq(reservations.id, r.id)).limit(1).for("update");
       if (!cur || cur.status !== "RESERVED") return;
       await tx.update(reservations).set({ status: "EXPIRED", updatedAt: now } as any).where(eq(reservations.id, r.id));
-      const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, cur.productId), eq(inventory.storeId, DEFAULT_STORE_ID))).limit(1).for("update");
+      const { storeId: defaultStoreId } = await loadDefaultBusinessAndStore(tx);
+      const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, cur.productId), eq(inventory.storeId, defaultStoreId))).limit(1).for("update");
       if (inv) await tx.update(inventory).set({ reservedQuantity: Math.max(0, (inv.reservedQuantity ?? 0) - cur.quantity), updatedAt: now }).where(eq(inventory.id, inv.id));
       await tx.update(orders).set({ paymentStatus: sql`case when ${orders.paymentStatus} in ('PENDING','UNPAID') then 'EXPIRED' else ${orders.paymentStatus} end`, updatedAt: now } as any).where(eq(orders.id, cur.orderId));
       await tx.update(payments).set({ status: sql`case when ${payments.status} in ('PENDING','pending','AWAITING_VERIFICATION') then 'EXPIRED' else ${payments.status} end` } as any).where(eq(payments.orderId, cur.orderId));

@@ -6,8 +6,6 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/server/db";
 import {
   businesses,
-  DEFAULT_BUSINESS_ID,
-  DEFAULT_STORE_ID,
   businessProfile,
   notificationSettings,
   privacySecuritySettings,
@@ -19,6 +17,7 @@ import {
   receiptSettings,
 } from "@/server/db/schema";
 import { ACTION_ROLES, ensureUserProfile, requireRole } from "@/server/auth/session";
+import { requireTenantContext, requireAnyRole } from "@/server/auth/authorization";
 
 function moneyPercentToRate(v: unknown, fallback = 0) {
   const n = Number(v);
@@ -143,6 +142,12 @@ export async function GET() {
     const auth = await requireSettingsAccess();
     if ((auth as any).error) return (auth as any).error;
 
+    // Use tenant context from middleware headers instead of DEFAULT_BUSINESS_ID
+    const { headers } = await import("next/headers");
+    const headersStore = await headers();
+    const businessId = headersStore.get("x-tenant-business-id");
+    const storeId = headersStore.get("x-tenant-store-id");
+
     const [
       profile,
       notifications,
@@ -163,8 +168,11 @@ export async function GET() {
       loadTableOrNull(operationalSettings, eq(operationalSettings.id, "default")),
       loadTableOrNull(paymentSettings, eq(paymentSettings.id, "default")),
       loadTableOrNull(systemSettings, eq(systemSettings.id, "default")),
-      loadTableOrNull(receiptSettings, and(eq(receiptSettings.businessId, DEFAULT_BUSINESS_ID), eq(receiptSettings.storeId, DEFAULT_STORE_ID))),
-      db.select({ id: businesses.id, name: businesses.name, slug: businesses.slug, currency: businesses.currency, timezone: businesses.timezone, status: businesses.status }).from(businesses).where(eq(businesses.id, DEFAULT_BUSINESS_ID)).limit(1),
+      loadTableOrNull(receiptSettings, and(
+        eq(receiptSettings.businessId, businessId || "00000000-0000-0000-0000-000000000001"),
+        eq(receiptSettings.storeId, storeId || "00000000-0000-0000-0000-000000000002")
+      )),
+      db.select({ id: businesses.id, name: businesses.name, slug: businesses.slug, currency: businesses.currency, timezone: businesses.timezone, status: businesses.status }).from(businesses).where(eq(businesses.id, businessId || "00000000-0000-0000-0000-000000000001")).limit(1),
     ]);
 
     const isUninitialized = !profile && !operational && !payment;
@@ -257,7 +265,7 @@ export async function GET() {
         businessLogo: !!profile,
         notificationChannels: !!notifications,
         sessionManagement: !!privacySecurity,
-        neonAccountEdit: true,
+        accountEdit: true,
         paymentGateway: payment?.paymentGatewayModuleStatus === "INSTALLED" || payment?.paymentGatewayModuleStatus === "CONFIGURED",
       },
       settingsState: isUninitialized ? "uninitialized" : "ready",
@@ -364,9 +372,13 @@ export async function PATCH(request: Request) {
     }
     if (section === "receipt") {
       const v = receiptSchema.parse(payload);
-      const [existing] = await db.select({ id: receiptSettings.id }).from(receiptSettings).where(and(eq(receiptSettings.businessId, DEFAULT_BUSINESS_ID), eq(receiptSettings.storeId, DEFAULT_STORE_ID))).limit(1);
+      const { headers } = await import("next/headers");
+      const headersStore = await headers();
+      const businessId = headersStore.get("x-tenant-business-id") || "00000000-0000-0000-0000-000000000001";
+      const storeId = headersStore.get("x-tenant-store-id") || "00000000-0000-0000-0000-000000000002";
+      const [existing] = await db.select({ id: receiptSettings.id }).from(receiptSettings).where(and(eq(receiptSettings.businessId, businessId), eq(receiptSettings.storeId, storeId))).limit(1);
       if (existing) await db.update(receiptSettings).set({ footer: v.receiptFooter, updatedAt: now }).where(eq(receiptSettings.id, existing.id));
-      else await db.insert(receiptSettings).values({ businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, footer: v.receiptFooter, updatedAt: now } as any);
+      else await db.insert(receiptSettings).values({ businessId, storeId, footer: v.receiptFooter, updatedAt: now } as any);
       return NextResponse.json({ ok: true, section });
     }
     return NextResponse.json({ error: "Bagian pengaturan tidak valid." }, { status: 400 });

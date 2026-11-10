@@ -1,4 +1,4 @@
-import { DashboardClientPage } from "./dashboard-client-page";
+import { DashboardClientPage } from "./dashboardClientPage";
 
 export default function Page() {
   // Onboarding is now handled client-side via dialog

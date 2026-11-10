@@ -2,12 +2,15 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional().default("postgres://dummy:dummy@localhost:5432/dummy"),
-  SUPABASE_URL: z.string().min(1).optional().default(""),
-  SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional().default(""),
-  SUPABASE_SECRET_KEY: z.string().min(1).optional().default(""),
-  SUPABASE_JWKS_URL: z.string().min(1).optional().default(""),
-  NEXT_PUBLIC_SUPABASE_URL: z.string().min(1).optional().default(""),
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional().default(""),
+  // Better Auth
+  BETTER_AUTH_SECRET: z.string().min(1),
+  BETTER_AUTH_URL: z.string().url().optional(),
+  // OAuth providers
+  GOOGLE_CLIENT_ID: z.string().optional().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
+  GITHUB_CLIENT_ID: z.string().optional().default(""),
+  GITHUB_CLIENT_SECRET: z.string().optional().default(""),
+  // App
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   // Gumroad membership. Defaults live in `src/lib/plans.ts`; these variables
@@ -18,16 +21,19 @@ const envSchema = z.object({
   GUMROAD_PRODUCT_PLUS: z.string().optional().default(""),
   GUMROAD_PRODUCT_PRO: z.string().optional().default(""),
   GUMROAD_VERIFY_WEBHOOK: z.string().optional().default("false"),
+  // Upstash Redis (optional, for distributed rate limiting)
+  UPSTASH_REDIS_REST_URL: z.string().optional().default(""),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional().default(""),
 });
 
 export const env = envSchema.parse({
   DATABASE_URL: process.env.DATABASE_URL,
-  SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
-  SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
-  SUPABASE_JWKS_URL: process.env.SUPABASE_JWKS_URL,
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+  BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+  GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   NODE_ENV: process.env.NODE_ENV,
   GUMROAD_SELLER_ID: process.env.GUMROAD_SELLER_ID,
@@ -36,6 +42,8 @@ export const env = envSchema.parse({
   GUMROAD_PRODUCT_PLUS: process.env.GUMROAD_PRODUCT_PLUS,
   GUMROAD_PRODUCT_PRO: process.env.GUMROAD_PRODUCT_PRO,
   GUMROAD_VERIFY_WEBHOOK: process.env.GUMROAD_VERIFY_WEBHOOK,
+  UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+  UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { StorefrontMenu } from "@/features/storefront/storefront-menu";
-import { PublicNavigation } from "@/components/public/public-navigation";
+import { StorefrontMenu } from "@/features/storefront/StorefrontMenu";
+import { PublicNavigation } from "@/components/public/PublicNavigation";
 
 export const dynamic = "force-dynamic";
 

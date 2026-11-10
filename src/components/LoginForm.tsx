@@ -1,0 +1,232 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { EyeIcon, EyeOffIcon, Loader2Icon, LogInIcon, AlertCircleIcon } from "lucide-react"
+import { z } from "zod"
+
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { authClient } from "@/lib/authClient"
+import { GoogleIcon, AppleIcon } from "@/components/ui/SocialIcons"
+import { cn } from "@/lib/utils"
+
+const loginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email wajib diisi")
+    .refine(
+      (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+      "Format email tidak valid"
+    ),
+  password: z.string().min(1, "Kata sandi wajib diisi"),
+})
+
+type LoginValues = z.infer<typeof loginSchema>
+
+export function LoginForm({
+  className,
+  ...props
+}: React.ComponentProps<"form">) {
+  const router = useRouter()
+  const [showPassword, setShowPassword] = useState(false)
+  const [formError, setFormError] = useState("")
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  })
+
+  const onSubmit = async (values: LoginValues) => {
+    setFormError("")
+
+    try {
+      const { error } = await authClient.signIn.email({
+        email: values.email,
+        password: values.password,
+      })
+
+      if (error) {
+        setFormError(error.message || "Email atau kata sandi salah.")
+        return
+      }
+
+      router.push("/dashboard")
+      router.refresh()
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Gagal masuk. Silakan coba lagi."
+      )
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setFormError("")
+    try {
+      const { error } = await (authClient as any).social.login({
+        provider: "google",
+        callbackURL: `${window.location.origin}/auth/callback`,
+      })
+      if (error) {
+        setFormError(error.message || "Gagal masuk dengan Google.")
+      }
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Gagal masuk dengan Google. Silakan coba lagi."
+      )
+    }
+  }
+
+  const handleAppleSignIn = () => {
+    toast.info("Coming Soon", {
+      description: "Login dengan Apple akan segera hadir.",
+    })
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className={cn("flex flex-col gap-6", className)}
+      noValidate
+      {...props}
+    >
+      <div className="space-y-1.5 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Masuk ke Niraya
+        </h1>
+        <p className="text-sm text-balance text-muted-foreground">
+          Gunakan email dan kata sandi akun Anda untuk melanjutkan.
+        </p>
+      </div>
+
+      {formError && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex items-center gap-2">
+            <AlertCircleIcon className="size-4 shrink-0" />
+            {formError}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <FieldGroup className="gap-5">
+        <Field data-invalid={!!errors.email}>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input
+            id="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="nama@niraya.id"
+            aria-invalid={!!errors.email}
+            {...register("email")}
+          />
+          <FieldError errors={[errors.email]} />
+        </Field>
+
+        <Field data-invalid={!!errors.password}>
+          <FieldLabel htmlFor="password">Kata sandi</FieldLabel>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="pr-10"
+              aria-invalid={!!errors.password}
+              {...register("password")}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="absolute top-1/2 right-1 -translate-y-1/2"
+              aria-label={
+                showPassword
+                  ? "Sembunyikan kata sandi"
+                  : "Tampilkan kata sandi"
+              }
+              onClick={() => setShowPassword((value) => !value)}
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </Button>
+          </div>
+          <FieldError errors={[errors.password]} />
+        </Field>
+
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <Loader2Icon className="animate-spin" />
+          ) : (
+            <LogInIcon />
+          )}
+          {isSubmitting ? "Memproses..." : "Masuk"}
+        </Button>
+      </FieldGroup>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleGoogleSignIn}
+          disabled={isSubmitting}
+        >
+          <GoogleIcon className="size-4" />
+          Google
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          onClick={handleAppleSignIn}
+          disabled={isSubmitting}
+        >
+          <AppleIcon className="size-4" />
+          Apple
+        </Button>
+      </div>
+
+      <FieldSeparator>atau</FieldSeparator>
+
+<div className="flex flex-col gap-2 text-center text-sm">
+          <Link
+            href="/forgot-password"
+            className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+          >
+            Lupa kata sandi?
+          </Link>
+          <p className="text-muted-foreground">
+            Belum punya akun?{" "}
+            <Link
+              href="/signup"
+              className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Daftar
+            </Link>
+          </p>
+        </div>
+      </form>
+    )
+  }

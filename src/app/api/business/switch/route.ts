@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
-import { getActiveBusinessIds } from "@/server/auth/business-context";
+import { getActiveBusinessIds } from "@/server/auth/BusinessContext";
 import { db } from "@/server/db";
 import { businesses, stores } from "@/server/db/schema";
 import { and, eq } from "drizzle-orm";

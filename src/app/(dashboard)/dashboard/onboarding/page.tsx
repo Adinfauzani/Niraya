@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle, AlertCircle, Building2 } from "lucide-react";
+import { MaintenanceDialog } from "@/components/maintenance";
 
 export default function OnboardingInitializationPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"checking" | "initializing" | "success" | "error">("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false);
+  const [maintenanceChecked, setMaintenanceChecked] = useState(false);
 
   const checkInitialization = async () => {
     try {
@@ -69,9 +72,47 @@ export default function OnboardingInitializationPage() {
     checkInitialization();
   };
 
+  // Check maintenance status
   useEffect(() => {
-    checkInitialization();
-  }, [retryCount]);
+    const checkMaintenance = async () => {
+      try {
+        const res = await fetch("/api/maintenance/status", { cache: "no-store" })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.enabled) {
+            setMaintenanceOpen(true)
+          }
+        }
+      } catch {
+        // Ignore errors, fail open
+      } finally {
+        setMaintenanceChecked(true)
+      }
+    }
+    checkMaintenance()
+  }, [])
+
+  useEffect(() => {
+    if (maintenanceChecked && !maintenanceOpen) {
+      checkInitialization();
+    }
+  }, [maintenanceChecked, maintenanceOpen, retryCount]);
+
+  // Don't render until maintenance check is done
+  if (!maintenanceChecked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center px-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex gap-1">
+            <span className="size-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: "-0.2s" }} />
+            <span className="size-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: "-0.1s" }} />
+            <span className="size-2 animate-bounce rounded-full bg-primary" />
+          </div>
+          <span>Memeriksa status sistem...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center px-4">
@@ -130,6 +171,8 @@ export default function OnboardingInitializationPage() {
           Detail bisnis dan toko dapat diubah nanti di Pengaturan
         </p>
       </div>
+
+      <MaintenanceDialog isOpen={maintenanceOpen} />
     </div>
   );
 }

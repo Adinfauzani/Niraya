@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { ForgotPasswordForm } from "@/components/forgot-password-form";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { ForgotPasswordForm } from "@/components/ForgotPasswordForm";
 import { Logo } from "@/components/ui/logo";
 
 function ForgotPasswordClient() {

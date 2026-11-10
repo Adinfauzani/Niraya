@@ -44,7 +44,7 @@ export const PLAN_CATALOG: PlanDefinition[] = PLAN_DEFINITIONS.map((plan) => ({
     PRODUCT_ID_OVERRIDES[plan.id] ?? plan.gumroadProductId,
 }));
 
-function toResolvedPlan(row: typeof plans.$inferSelect): ResolvedPlan {
+export function toResolvedPlan(row: typeof plans.$inferSelect): ResolvedPlan {
   return {
     id: row.id,
     code: row.code,

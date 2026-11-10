@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import {
   Field,
   FieldError,
@@ -50,41 +50,34 @@ function ResetPasswordClient() {
   });
 
   useEffect(() => {
-    let supabaseClient: typeof import("@/lib/auth-client").supabaseClient;
-    import("@/lib/auth-client").then((mod) => {
-      supabaseClient = mod.supabaseClient;
-      
-      const code = searchParams.get("code");
-      if (code) {
-        supabaseClient.auth.exchangeCodeForSession(code).then(({ error }: { error: Error | null }) => {
-          if (error) {
-            setIsValidToken(false);
-            setFormError("Tautan reset tidak valid atau sudah kadaluarsa.");
-          }
-        });
-      } else {
-        supabaseClient.auth.getSession().then(({ data }: { data: { session: any } }) => {
-          if (!data.session) {
-            setIsValidToken(false);
-            setFormError("Sesi tidak valid. Silakan minta tautan reset baru.");
-          }
-        });
+    const load = async () => {
+      const { authClient }: any = await import("@/lib/authClient");
+      const token = searchParams.get("token");
+      if (!token) {
+        setIsValidToken(false);
+        setFormError("Tautan reset tidak valid atau sudah kadaluarsa.");
       }
-    });
+    };
+    void load();
   }, [searchParams]);
 
   const onSubmit = async (values: ResetValues) => {
     if (!isValidToken) return;
-    
+
     setFormError("");
     setIsLoading(true);
 
     try {
-      const mod = await import("@/lib/auth-client");
-      const supabaseClient = mod.supabaseClient;
-      
-      const { error } = await supabaseClient.auth.updateUser({
-        password: values.password,
+      const { authClient }: any = await import("@/lib/authClient");
+      const token = searchParams.get("token");
+      if (!token) {
+        setIsValidToken(false);
+        setFormError("Tautan reset tidak valid atau sudah kadaluarsa.");
+        return;
+      }
+      const { error } = await authClient.resetPassword({
+        newPassword: values.password,
+        token,
       });
 
       if (error) {

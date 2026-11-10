@@ -394,7 +394,7 @@ export const paymentSettings = s.table(
   ]
 );
 
-/** Sistem — maintenance, debug, system-level. */
+/** Sistem — debug, system-level. */
 export const systemSettings = s.table(
   "SystemSettings",
   {
@@ -403,8 +403,6 @@ export const systemSettings = s.table(
       .notNull()
       .default(DEFAULT_BUSINESS_ID)
       .references(() => businesses.id, { onDelete: "cascade" }),
-    maintenanceMode: boolean("MaintenanceMode").notNull().default(false),
-    maintenanceMessage: text("MaintenanceMessage"),
     debugMode: boolean("DebugMode").notNull().default(false),
     apiRateLimit: integer("ApiRateLimit").notNull().default(100),
     enableApiDocs: boolean("EnableApiDocs").notNull().default(false),

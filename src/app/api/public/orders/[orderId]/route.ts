@@ -3,8 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { orders, orderItems, payments, businessSettings, orderStatusHistory } from "@/server/db/schema";
 import { getSession } from "@/lib/auth";
-import { getGuestTokenFromRequest, resolveGuestAccess } from "@/server/storefront/guest-access";
-import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/rate-limit";
+import { getGuestTokenFromRequest, resolveGuestAccess } from "@/server/storefront/GuestAccess";
+import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/RateLimit";
 
 export async function GET(request: Request, { params }: { params: Promise<{ orderId: string }> }) {
   const ip = getClientIp(request); const rl = await rateLimitAsync(`public:order:${ip}`, { limit: 60, windowMs: 60_000 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getClientIp, rateLimitAsync, rateLimitResponse, stableRateKey } from "@/server/security/rate-limit";
-import { assertSameOriginIfCookieAuth } from "@/server/storefront/request-security";
-import { getGuestTokenFromRequest, guestCookieHeader, rotateGuestAccess } from "@/server/storefront/guest-access";
+import { getClientIp, rateLimitAsync, rateLimitResponse, stableRateKey } from "@/server/security/RateLimit";
+import { assertSameOriginIfCookieAuth } from "@/server/storefront/RequestSecurity";
+import { getGuestTokenFromRequest, guestCookieHeader, rotateGuestAccess } from "@/server/storefront/GuestAccess";
 
 export async function POST(request: Request, ctx: { params: Promise<{ orderId: string }> }) {
   const ip = getClientIp(request);

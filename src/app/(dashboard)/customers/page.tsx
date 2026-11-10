@@ -1,4 +1,4 @@
-import { CustomersPage } from "@/features/customers/customers-page";
+import { CustomersPage } from "@/features/customers/CustomersPage";
 
 export default function Page() {
   return <CustomersPage />;

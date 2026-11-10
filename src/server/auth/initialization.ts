@@ -16,6 +16,20 @@ export interface UserIdentity {
   avatarUrl: string | null;
 }
 
+/** Role aplikasi yang diberikan secara otomatis oleh `ensureUserProfile`. */
+export const DEFAULT_USER_ROLE = "user";
+/** Role yang diberikan pemilik workspace setelah onboarding selesai. */
+export const OWNER_ROLE = "owner";
+
+/**
+ * Tentukan role yang harus diberikan profil aplikasi setelah workspace
+ * diinisialisasi. Pemilik selalu dapat `owner`; profil yang sudah ada dari
+ * `ensureUserProfile` (role `user`) dipromosikan.
+ */
+export function resolveWorkspaceRole(existingRole: string | null | undefined): string {
+  return existingRole === OWNER_ROLE ? OWNER_ROLE : OWNER_ROLE;
+}
+
 /**
  * Generate a safe fallback username from email or userId
  */
@@ -86,14 +100,21 @@ export async function initializeUserWorkspace(identity: UserIdentity): Promise<I
   // Check existing initialization first (idempotent)
   const status = await checkInitializationStatus(userId);
   if (status.isInitialized && status.businessId && status.storeId) {
-    // Update profile name if missing
+    // Profil sudah ada (bisa dari `ensureUserProfile` dengan role `user`).
+    // Pemilik workspace harus punya role `owner` agar akses dashboard tidak 403.
     const profile = await db.query.userProfiles.findFirst({
       where: eq(userProfiles.id, userId),
     });
-    if (profile && !profile.name && displayName) {
+    const targetRole = resolveWorkspaceRole(profile?.role);
+    const targetName = displayName || profile?.name || null;
+    if (profile && (profile.role !== targetRole || (targetName && !profile.name))) {
       await db
         .update(userProfiles)
-        .set({ name: displayName, updatedAt: new Date() })
+        .set({
+          role: targetRole,
+          name: targetName ?? profile.name,
+          updatedAt: new Date(),
+        })
         .where(eq(userProfiles.id, userId));
     }
     return { businessId: status.businessId, storeId: status.storeId!, isNewUser: false };
@@ -144,7 +165,14 @@ export async function initializeUserWorkspace(identity: UserIdentity): Promise<I
   });
 
   if (existingProfile) {
-    if (!existingProfile.name && displayName) {
+    // Pemilik workspace selalu dapat role `owner` di profil aplikasinya,
+    // bahkan jika profil sudah ada dari `ensureUserProfile` (role `user`).
+    if (existingProfile.role !== "owner") {
+      await db
+        .update(userProfiles)
+        .set({ role: "owner", name: displayName, updatedAt: new Date() })
+        .where(eq(userProfiles.id, userId));
+    } else if (!existingProfile.name && displayName) {
       await db
         .update(userProfiles)
         .set({ name: displayName, updatedAt: new Date() })

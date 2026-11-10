@@ -6,6 +6,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+
 import { DEFAULT_BUSINESS_ID, auditSchema } from "./schema";
 import { businesses } from "./core";
 
@@ -80,7 +81,7 @@ export const fileAttachments = s.table(
     fileName: text("FileName").notNull(),
     mimeType: text("MimeType").notNull(),
     sizeBytes: bigint("SizeBytes", { mode: "number" }).notNull().default(0),
-    storageProvider: text("StorageProvider").notNull().default("neon"),
+    storageProvider: text("StorageProvider").notNull().default("supabase"),
     storageKey: text("StorageKey").notNull(),
     url: text("Url"),
     uploadedByUserId: text("UploadedByUserId"),

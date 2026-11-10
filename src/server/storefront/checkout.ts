@@ -2,8 +2,7 @@ import crypto from "crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
-  DEFAULT_BUSINESS_ID,
-  DEFAULT_STORE_ID,
+  businesses,
   checkoutIdempotency,
   inventory,
   reservations,
@@ -13,9 +12,18 @@ import {
   payments,
   products,
   productVariants,
+  stores,
   taxRates,
 } from "@/server/db/schema";
-import { createGuestAccessInTx } from "@/server/storefront/guest-access";
+import { createGuestAccessInTx } from "@/server/storefront/GuestAccess";
+
+async function loadDefaultBusinessAndStore(tx: any): Promise<{ businessId: string; storeId: string }> {
+  const [business] = await tx.select({ id: businesses.id }).from(businesses).where(eq(businesses.status, "active")).limit(1);
+  if (!business) throw Object.assign(new Error("Tidak ada bisnis aktif."), { status: 503 });
+  const [store] = await tx.select({ id: stores.id }).from(stores).where(and(eq(stores.businessId, business.id), eq(stores.isActive, true))).limit(1);
+  if (!store) throw Object.assign(new Error("Tidak ada toko aktif."), { status: 503 });
+  return { businessId: business.id, storeId: store.id };
+}
 
 export type StorefrontCheckoutInput = {
   idempotencyKey: string;
@@ -50,7 +58,7 @@ async function loadCheckoutSettings(tx: any) {
 
 /** Direct public storefront checkout. No QR token, no dining table context. DiningTableId always NULL.
  *  DB orderSource stored as QR_GENERAL for current CHECK constraint compatibility; public responses report STOREFRONT.
- *  Authenticated ownership is recorded via orderStatusHistory.changedByUserId (Neon auth user id), not orders.customerId,
+ *  Authenticated ownership is recorded via orderStatusHistory.changedByUserId (Supabase auth user id), not orders.customerId,
  *  because orders.customerId references customers.Customers.id and no auth->customer mapping exists. */
 export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) {
   if (input.paymentMethod !== "manual_transfer") throw Object.assign(new Error("Metode pembayaran tidak didukung."), { status: 400 });
@@ -69,13 +77,14 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
     }
     const settings = await loadCheckoutSettings(tx);
     if (!settings.manualTransferEnabled) throw Object.assign(new Error("Pembayaran transfer manual belum diaktifkan."), { status: 403 });
+    const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadDefaultBusinessAndStore(tx);
 
     const productRows = await tx.select().from(products).where(inArray(products.id, productIds)).orderBy(products.id).for("update");
-    const invRows = await tx.select().from(inventory).where(and(eq(inventory.storeId, DEFAULT_STORE_ID), inArray(inventory.productId, productIds))).orderBy(inventory.productId).for("update");
+    const invRows = await tx.select().from(inventory).where(and(eq(inventory.storeId, defaultStoreId), inArray(inventory.productId, productIds))).orderBy(inventory.productId).for("update");
     const varIds = canonicalItems.map(i=>i.variantId).filter(Boolean) as string[];
     const varRows = varIds.length ? await tx.select().from(productVariants).where(inArray(productVariants.id, varIds)) : [];
     const pBy = new Map(productRows.map((r:any)=>[r.id,r])); const iBy = new Map(invRows.map((r:any)=>[r.productId,r])); const vBy = new Map(varRows.map((r:any)=>[r.id,r]));
-    const [defaultTaxRate] = await tx.select().from(taxRates).where(and(eq(taxRates.businessId,DEFAULT_BUSINESS_ID), eq(taxRates.isDefault,true))).limit(1);
+    const [defaultTaxRate] = await tx.select().from(taxRates).where(and(eq(taxRates.businessId,defaultBusinessId), eq(taxRates.isDefault,true))).limit(1);
     const taxRate = settings.taxRate != null ? settings.taxRate : Number(defaultTaxRate?.rate ?? 0);
 
     let subtotal = 0; const items: any[] = [];
@@ -97,7 +106,7 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
     const orderSource = "QR_GENERAL"; // DB CHECK compat; DiningTableId NULL => storefront
     const authUserId = input.customer.mode === "authenticated" ? String(input.customer.authUserId) : null;
     await tx.insert(orders).values({
-      id: orderId, businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, orderNumber, orderSource, orderStatus: "SUBMITTED", paymentStatus: "PENDING",
+      id: orderId, businessId: defaultBusinessId, storeId: defaultStoreId, orderNumber, orderSource, orderStatus: "SUBMITTED", paymentStatus: "PENDING",
       diningTableId: null, customerId: null, // FK points to customers.Customers.id; auth ownership tracked in orderStatusHistory
       customerName: input.customer.name.trim(), customerPhone: input.customer.phone.trim(), orderType: input.orderType || "takeaway",
       tableNumber: null, paymentMethod: "manual_transfer", currency:"IDR", subtotal: subtotal.toFixed(2), discountTotal:"0.00", taxTotal: tax.toFixed(2), grandTotal: total.toFixed(2),
@@ -107,10 +116,10 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
       const orderItemId = crypto.randomUUID();
       await tx.insert(orderItems).values({ id: orderItemId, orderId, productId: it.productId, productVariantId: it.variantId, productName: it.productName, sku: it.sku, variantName: it.variantName, quantity: it.quantity, unitPrice: it.unitPrice.toFixed(2), discountTotal:"0.00", taxTotal:"0.00", subtotal: it.lineTotal.toFixed(2), notes: it.notes, createdAt: now } as any);
       if (it.product.isStockTracked ?? true) {
-        await tx.insert(reservations).values({ id: crypto.randomUUID(), businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, orderId, orderItemId, productId: it.productId, quantity: it.quantity, status: "RESERVED", expiresAt, createdAt: now, updatedAt: now } as any);
+        await tx.insert(reservations).values({ id: crypto.randomUUID(), businessId: defaultBusinessId, storeId: defaultStoreId, orderId, orderItemId, productId: it.productId, quantity: it.quantity, status: "RESERVED", expiresAt, createdAt: now, updatedAt: now } as any);
         const inv = it.inv; const nextReserved = (inv?.reservedQuantity ?? 0) + it.quantity;
         if (inv) await tx.update(inventory).set({ reservedQuantity: nextReserved, updatedAt: now }).where(eq(inventory.id, inv.id));
-        else await tx.insert(inventory).values({ businessId: DEFAULT_BUSINESS_ID, storeId: DEFAULT_STORE_ID, productId: it.productId, stockQuantity: it.product.stockQuantity ?? 0, reservedQuantity: nextReserved, minimumStock: it.product.minimumStock ?? 0, updatedAt: now } as any);
+        else await tx.insert(inventory).values({ businessId: defaultBusinessId, storeId: defaultStoreId, productId: it.productId, stockQuantity: it.product.stockQuantity ?? 0, reservedQuantity: nextReserved, minimumStock: it.product.minimumStock ?? 0, updatedAt: now } as any);
       }
     }
     await tx.insert(payments).values({ id: paymentId, transactionId: null, orderId, channel: "STOREFRONT", currency:"IDR", paymentMethod:"manual_transfer", amount: total.toFixed(2), status:"PENDING", expiresAt, metadata: { source: "STOREFRONT" }, createdAt: now } as any);

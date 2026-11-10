@@ -19,7 +19,6 @@ export const PAYMENTS_SCHEMA = "payments";
 export const LOOKUPS_SCHEMA = "lookups";
 export const SETTINGS_SCHEMA = "settings";
 export const AUDIT_SCHEMA = "audit";
-export const DEMO_SCHEMA = "demo";
 export const PLATFORM_SCHEMA = "platform";
 
 export const coreSchema = pgSchema(CORE_SCHEMA);
@@ -34,7 +33,6 @@ export const paymentsSchema = pgSchema(PAYMENTS_SCHEMA);
 export const lookupsSchema = pgSchema(LOOKUPS_SCHEMA);
 export const settingsSchema = pgSchema(SETTINGS_SCHEMA);
 export const auditSchema = pgSchema(AUDIT_SCHEMA);
-export const demoSchema = pgSchema(DEMO_SCHEMA);
 export const platformSchema = pgSchema(PLATFORM_SCHEMA);
 
 /**

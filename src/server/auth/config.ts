@@ -1,0 +1,66 @@
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { github, google } from "better-auth/social-providers";
+import { db } from "@/server/db";
+import * as authSchema from "@/server/db/schema/auth";
+
+/**
+ * Centralized Better Auth configuration.
+ *
+ * - Drizzle adapter against Supabase PostgreSQL (existing connection).
+ * - Auth tables live in a dedicated `auth` schema, separate from the 13
+ *   business domain schemas.
+ * - Google + GitHub OAuth enabled.
+ * - Email/password, email verification, and password reset are built-in.
+ * - Secret comes from `BETTER_AUTH_SECRET` env var.
+ */
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: authSchema,
+    camelCase: false,
+    transaction: false, // Supabase pooler (port 6543) doesn't support prepared statements
+  }),
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    },
+  },
+  email: {
+    requireEmailVerification: true,
+  },
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url, token }, request) => {
+      console.log(`[auth] password reset requested for ${user.email}; url=${url}`);
+    },
+    onPasswordReset: async ({ user }, request) => {
+      console.log(`[auth] password reset completed for ${user.email}`);
+    },
+  },
+  user: {
+    additionalFields: {
+      // Legacy Supabase user ID for identity mapping (nullable).
+      // Set during migration tooling; null for new users.
+      legacySupabaseUserId: {
+        type: "string",
+        required: false,
+        defaultValue: null,
+      },
+    },
+  },
+  advanced: {
+    database: {
+      generateId: "uuid",
+    },
+  },
+  secret: process.env.BETTER_AUTH_SECRET!,
+  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL!,
+});

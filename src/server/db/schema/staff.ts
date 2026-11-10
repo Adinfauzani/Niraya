@@ -16,7 +16,7 @@ import { businesses, roles, stores } from "./core";
 const s = staffSchema;
 
 /**
- * Data operasional staf. Kredensial tetap di Neon Auth; `UserId` hanya
+ * Data operasional staf. Kredensial tetap di Supabase Auth; `UserId` hanya
  * menghubungkan staf ke identitas login jika ada.
  */
 export const staff = s.table(

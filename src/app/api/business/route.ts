@@ -4,24 +4,58 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/server/db";
-import { businesses, stores } from "@/server/db/schema";
+import { stores } from "@/server/db/schema";
 import { getSession } from "@/lib/auth";
-import { getBusinessData, mutateBusiness } from "@/server/business/service";
+import { getBusinessData } from "@/server/business/service";
+import {
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from "@/server/services/CategoryService";
+import {
+  createProduct,
+  updateProduct,
+  updateProductStatus,
+  deleteProduct,
+} from "@/server/services/ProductService";
+import {
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+} from "@/server/services/CustomerService";
+import {
+  createStaff,
+  updateStaff,
+  deleteStaff,
+} from "@/server/services/StaffService";
+import { adjustStock } from "@/server/services/StockService";
+import { voidTransaction } from "@/server/services/TransactionService";
+import {
+  createStore,
+  updateStore,
+  deleteStore,
+} from "@/server/services/StoreService";
 import {
   ensureUserProfile,
   requireRole,
   ACTION_ROLES,
 } from "@/server/auth/session";
-import { createSeedData } from "@/lib/business-seed";
-import { getBusinessContext, getActiveBusinessIds } from "@/server/auth/business-context";
+import { getBusinessContext, getActiveBusinessIds } from "@/server/auth/BusinessContext";
+import { getMaintenanceConfig, resolveEstimatedEndAt } from "@/server/maintenance";
+
+async function checkMaintenanceMode(): Promise<{ enabled: boolean; startedAt: Date | null; estimatedEndAt: Date | null }> {
+  const config = await getMaintenanceConfig();
+  if (!config.enabled) {
+    return { enabled: false, startedAt: null, estimatedEndAt: null };
+  }
+  return {
+    enabled: true,
+    startedAt: config.startedAt,
+    estimatedEndAt: resolveEstimatedEndAt(config),
+  };
+}
 
 async function requireSession() {
-  const cookieStore = await cookies();
-  const demo = cookieStore.get("niraya_demo")?.value;
-  if (demo === "1") {
-    return { id: "demo-user" } as any;
-  }
-  
   const session = await getSession();
   const user =
     (session as any)?.user ?? (session as any)?.data?.user ?? null;
@@ -33,11 +67,6 @@ async function requireSession() {
 
 async function requireBusinessContext() {
   const cookieStore = await cookies();
-  const demo = cookieStore.get("niraya_demo")?.value;
-  if (demo === "1") {
-    return { businessId: "00000000-0000-0000-0000-000000000001", storeId: "00000000-0000-0000-0000-000000000002" };
-  }
-  
   // Check for selected business/store cookies
   const selectedBusinessId = cookieStore.get("niraya_selected_business")?.value;
   const selectedStoreId = cookieStore.get("niraya_selected_store")?.value;
@@ -101,12 +130,6 @@ const BusinessQuerySchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  const demo = cookieStore.get("niraya_demo")?.value;
-  if (demo === "1") {
-    return NextResponse.json(createSeedData());
-  }
-  
   const user = await requireSession();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -153,15 +176,22 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const demo = cookieStore.get("niraya_demo")?.value;
-  if (demo === "1") {
-    return NextResponse.json({ ok: true });
-  }
-  
   const user = await requireSession();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Check maintenance mode for write operations
+  const maintenance = await checkMaintenanceMode();
+  if (maintenance.enabled) {
+    return NextResponse.json(
+      { 
+        error: "Sistem sedang dalam mode maintenance. Operasi tulisan diblokir.",
+        code: "MAINTENANCE_MODE",
+        estimatedEndAt: maintenance.estimatedEndAt?.toISOString() ?? null,
+      },
+      { status: 503 }
+    );
   }
 
   const { businessId, storeId } = await requireBusinessContext();
@@ -188,13 +218,152 @@ export async function POST(request: Request) {
       }
     }
 
-    const { getCurrentUserRole } = await import("@/server/auth/session");
-    const result = await mutateBusiness(action, body?.payload ?? {}, {
-      actingUserId: user.id,
-      actingUserRole: await getCurrentUserRole(),
-      businessId: resolvedBusinessId,
-      storeId: resolvedStoreId,
-    });
+    const payload = body?.payload ?? {};
+    let result: { ok: true };
+
+    switch (action) {
+      case "category.create":
+        result = await createCategory(resolvedBusinessId, {
+          id: payload.id,
+          name: payload.name,
+          description: payload.description,
+          status: payload.status,
+        });
+        break;
+      case "category.update":
+        result = await updateCategory(resolvedBusinessId, payload.id, {
+          name: payload.name,
+          description: payload.description,
+          status: payload.status,
+        });
+        break;
+      case "category.delete":
+        result = await deleteCategory(resolvedBusinessId, payload.id);
+        break;
+      case "product.create":
+        result = await createProduct(resolvedBusinessId, resolvedStoreId, {
+          id: payload.id,
+          name: payload.name,
+          sku: payload.sku,
+          barcode: payload.barcode,
+          categoryId: payload.categoryId,
+          price: payload.price,
+          cost: payload.cost,
+          stock: payload.stock,
+          minStock: payload.minStock,
+          unit: payload.unit,
+          imageUrl: payload.imageUrl,
+          status: payload.status,
+        });
+        break;
+      case "product.update":
+        result = await updateProduct(resolvedBusinessId, resolvedStoreId, payload.id, {
+          name: payload.name,
+          sku: payload.sku,
+          barcode: payload.barcode,
+          categoryId: payload.categoryId,
+          price: payload.price,
+          cost: payload.cost,
+          stock: payload.stock,
+          minStock: payload.minStock,
+          unit: payload.unit,
+          imageUrl: payload.imageUrl,
+          status: payload.status,
+        });
+        break;
+      case "product.status":
+        result = await updateProductStatus(resolvedBusinessId, payload.id, payload.status);
+        break;
+      case "product.delete":
+        result = await deleteProduct(resolvedBusinessId, resolvedStoreId, payload.id);
+        break;
+      case "customer.create":
+        result = await createCustomer(resolvedBusinessId, {
+          id: payload.id,
+          name: payload.name,
+          phone: payload.phone,
+          email: payload.email,
+          notes: payload.notes,
+          joinedAt: payload.joinedAt,
+        });
+        break;
+      case "customer.update":
+        result = await updateCustomer(resolvedBusinessId, payload.id, {
+          name: payload.name,
+          phone: payload.phone,
+          email: payload.email,
+          notes: payload.notes,
+        });
+        break;
+      case "customer.delete":
+        result = await deleteCustomer(resolvedBusinessId, payload.id);
+        break;
+      case "staff.create":
+        result = await createStaff(resolvedBusinessId, resolvedStoreId, {
+          id: payload.id,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+          status: payload.status,
+          joinedAt: payload.joinedAt,
+        });
+        break;
+      case "staff.update":
+        result = await updateStaff(resolvedBusinessId, payload.id, {
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+          status: payload.status,
+        });
+        break;
+      case "staff.delete":
+        result = await deleteStaff(resolvedBusinessId, payload.id);
+        break;
+      case "stock.adjust":
+        result = await adjustStock(resolvedBusinessId, resolvedStoreId, {
+          productId: payload.productId,
+          quantity: payload.quantity,
+          mode: payload.mode,
+          note: payload.note,
+          staff: payload.staff,
+          movementId: payload.movementId,
+          actingUserId: user.id,
+        });
+        break;
+      case "transaction.void":
+        result = await voidTransaction(resolvedBusinessId, resolvedStoreId, payload.id, payload.reason);
+        break;
+      case "store.create":
+        result = await createStore(resolvedBusinessId, {
+          id: payload.id,
+          name: payload.name,
+          code: payload.code,
+          address: payload.address,
+          phone: payload.phone,
+          email: payload.email,
+          timezone: payload.timezone,
+          isActive: payload.isActive,
+          createdAt: payload.createdAt,
+        });
+        break;
+      case "store.update":
+        result = await updateStore(resolvedBusinessId, payload.id, {
+          name: payload.name,
+          code: payload.code,
+          address: payload.address,
+          phone: payload.phone,
+          email: payload.email,
+          timezone: payload.timezone,
+          isActive: payload.isActive,
+        });
+        break;
+      case "store.delete":
+        result = await deleteStore(resolvedBusinessId, payload.id);
+        break;
+      default:
+        throw new Error(`Aksi tidak dikenal: ${action}`);
+    }
+
     return NextResponse.json(result);
   } catch (error: unknown) {
     const err = error as any;

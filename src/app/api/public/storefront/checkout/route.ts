@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
-import { assertSameOriginIfCookieAuth } from "@/server/storefront/request-security";
-import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/rate-limit";
+import { assertSameOriginIfCookieAuth } from "@/server/storefront/RequestSecurity";
+import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/RateLimit";
 import { executeStorefrontCheckout } from "@/server/storefront/checkout";
-import { guestCookieHeader } from "@/server/storefront/guest-access";
+import { guestCookieHeader } from "@/server/storefront/GuestAccess";
+import { getMaintenanceConfig } from "@/server/maintenance";
+
+async function checkMaintenanceMode(): Promise<{ enabled: boolean; estimatedEndAt: Date | null }> {
+  const config = await getMaintenanceConfig();
+  if (!config.enabled) {
+    return { enabled: false, estimatedEndAt: null };
+  }
+  return { enabled: true, estimatedEndAt: config.estimatedEndAt };
+}
 
 const schema = z.object({
   idempotencyKey: z.string().min(8).max(128),
@@ -20,6 +29,18 @@ async function safeJson(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const maintenance = await checkMaintenanceMode();
+  if (maintenance.enabled) {
+    return NextResponse.json(
+      {
+        error: "Sistem sedang dalam mode maintenance. Checkout tidak tersedia.",
+        code: "MAINTENANCE_MODE",
+        estimatedEndAt: maintenance.estimatedEndAt?.toISOString() ?? null,
+      },
+      { status: 503 }
+    );
+  }
+
   const origin = assertSameOriginIfCookieAuth(request);
   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
   const ip = getClientIp(request);

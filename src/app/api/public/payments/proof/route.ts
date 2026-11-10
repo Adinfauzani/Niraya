@@ -3,11 +3,11 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { orders } from "@/server/db/schema";
-import { getGuestTokenFromRequest, resolveGuestAccess } from "@/server/storefront/guest-access";
-import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/rate-limit";
-import { assertSameOriginIfCookieAuth } from "@/server/storefront/request-security";
+import { getGuestTokenFromRequest, resolveGuestAccess } from "@/server/storefront/GuestAccess";
+import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/RateLimit";
+import { assertSameOriginIfCookieAuth } from "@/server/storefront/RequestSecurity";
 import { submitPaymentProof } from "@/server/storefront/payments";
-import { storePaymentProof } from "@/server/storage/payment-proof";
+import { storePaymentProof } from "@/server/storage/PaymentProof";
 
 const Meta = z.object({ orderId: z.string().min(1), paymentId: z.string().uuid(), referenceNumber: z.string().max(100).optional() });
 export async function POST(request: Request) {
