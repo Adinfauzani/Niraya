@@ -31,19 +31,6 @@ CREATE TABLE "settings"."BusinessSettings" (
 );
 CREATE INDEX "BusinessSettings_BusinessId_idx" ON "settings"."BusinessSettings" ("BusinessId");
 
--- Enable RLS on BusinessSettings
-ALTER TABLE "settings"."BusinessSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read business settings of businesses they are active members of
-CREATE POLICY "business_settings_select_member" ON "settings"."BusinessSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update business settings
-CREATE POLICY "business_settings_update_admin" ON "settings"."BusinessSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- StoreSettings: per-store overrides.
 CREATE TABLE "settings"."StoreSettings" (
@@ -60,24 +47,6 @@ CREATE TABLE "settings"."StoreSettings" (
 );
 CREATE INDEX "StoreSettings_BusinessId_idx" ON "settings"."StoreSettings" ("BusinessId");
 
--- Enable RLS on StoreSettings
-ALTER TABLE "settings"."StoreSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read store settings of businesses they are active members of
-CREATE POLICY "store_settings_select_member" ON "settings"."StoreSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers can insert store settings
-CREATE POLICY "store_settings_insert_manager" ON "settings"."StoreSettings"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
-
--- Policy: business owners/admins/managers can update store settings
-CREATE POLICY "store_settings_update_manager" ON "settings"."StoreSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
 
 -- ReceiptSettings: receipt configuration.
 CREATE TABLE "settings"."ReceiptSettings" (
@@ -96,24 +65,6 @@ CREATE TABLE "settings"."ReceiptSettings" (
 CREATE INDEX "ReceiptSettings_BusinessId_idx" ON "settings"."ReceiptSettings" ("BusinessId");
 CREATE INDEX "ReceiptSettings_StoreId_idx" ON "settings"."ReceiptSettings" ("StoreId");
 
--- Enable RLS on ReceiptSettings
-ALTER TABLE "settings"."ReceiptSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read receipt settings of businesses they are active members of
-CREATE POLICY "receipt_settings_select_member" ON "settings"."ReceiptSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers can insert receipt settings
-CREATE POLICY "receipt_settings_insert_manager" ON "settings"."ReceiptSettings"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
-
--- Policy: business owners/admins/managers can update receipt settings
-CREATE POLICY "receipt_settings_update_manager" ON "settings"."ReceiptSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
 
 -- BusinessProfile: public business identity and contact details.
 CREATE TABLE "settings"."BusinessProfile" (
@@ -132,19 +83,6 @@ CREATE TABLE "settings"."BusinessProfile" (
 );
 CREATE INDEX "BusinessProfile_BusinessId_idx" ON "settings"."BusinessProfile" ("BusinessId");
 
--- Enable RLS on BusinessProfile
-ALTER TABLE "settings"."BusinessProfile" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read business profile of businesses they are active members of
-CREATE POLICY "business_profile_select_member" ON "settings"."BusinessProfile"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update business profile
-CREATE POLICY "business_profile_update_admin" ON "settings"."BusinessProfile"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- NotificationSettings: notification channel and delivery preferences.
 CREATE TABLE "settings"."NotificationSettings" (
@@ -168,19 +106,6 @@ CREATE TABLE "settings"."NotificationSettings" (
 );
 CREATE INDEX "NotificationSettings_BusinessId_idx" ON "settings"."NotificationSettings" ("BusinessId");
 
--- Enable RLS on NotificationSettings
-ALTER TABLE "settings"."NotificationSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read notification settings of businesses they are active members of
-CREATE POLICY "notification_settings_select_member" ON "settings"."NotificationSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update notification settings
-CREATE POLICY "notification_settings_update_admin" ON "settings"."NotificationSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- PrivacySecuritySettings: data retention, sessions, 2FA.
 CREATE TABLE "settings"."PrivacySecuritySettings" (
@@ -200,19 +125,6 @@ CREATE TABLE "settings"."PrivacySecuritySettings" (
 );
 CREATE INDEX "PrivacySecuritySettings_BusinessId_idx" ON "settings"."PrivacySecuritySettings" ("BusinessId");
 
--- Enable RLS on PrivacySecuritySettings
-ALTER TABLE "settings"."PrivacySecuritySettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read privacy security settings of businesses they are active members of
-CREATE POLICY "privacy_security_settings_select_member" ON "settings"."PrivacySecuritySettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update privacy security settings
-CREATE POLICY "privacy_security_settings_update_admin" ON "settings"."PrivacySecuritySettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- AccountSettings: account and user-management preferences.
 CREATE TABLE "settings"."AccountSettings" (
@@ -228,19 +140,6 @@ CREATE TABLE "settings"."AccountSettings" (
 );
 CREATE INDEX "AccountSettings_BusinessId_idx" ON "settings"."AccountSettings" ("BusinessId");
 
--- Enable RLS on AccountSettings
-ALTER TABLE "settings"."AccountSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read account settings of businesses they are active members of
-CREATE POLICY "account_settings_select_member" ON "settings"."AccountSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update account settings
-CREATE POLICY "account_settings_update_admin" ON "settings"."AccountSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- AppearanceSettings: theme, language, UI preferences.
 CREATE TABLE "settings"."AppearanceSettings" (
@@ -258,19 +157,6 @@ CREATE TABLE "settings"."AppearanceSettings" (
 );
 CREATE INDEX "AppearanceSettings_BusinessId_idx" ON "settings"."AppearanceSettings" ("BusinessId");
 
--- Enable RLS on AppearanceSettings
-ALTER TABLE "settings"."AppearanceSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read appearance settings of businesses they are active members of
-CREATE POLICY "appearance_settings_select_member" ON "settings"."AppearanceSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update appearance settings
-CREATE POLICY "appearance_settings_update_admin" ON "settings"."AppearanceSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- OperationalSettings: currency, timezone, tax, discounts, stock, reservations.
 CREATE TABLE "settings"."OperationalSettings" (
@@ -292,19 +178,6 @@ CREATE TABLE "settings"."OperationalSettings" (
 );
 CREATE INDEX "OperationalSettings_BusinessId_idx" ON "settings"."OperationalSettings" ("BusinessId");
 
--- Enable RLS on OperationalSettings
-ALTER TABLE "settings"."OperationalSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read operational settings of businesses they are active members of
-CREATE POLICY "operational_settings_select_member" ON "settings"."OperationalSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update operational settings
-CREATE POLICY "operational_settings_update_admin" ON "settings"."OperationalSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- PaymentSettings: gateway and manual-transfer payment settings.
 CREATE TABLE "settings"."PaymentSettings" (
@@ -325,19 +198,6 @@ CREATE TABLE "settings"."PaymentSettings" (
 );
 CREATE INDEX "PaymentSettings_BusinessId_idx" ON "settings"."PaymentSettings" ("BusinessId");
 
--- Enable RLS on PaymentSettings
-ALTER TABLE "settings"."PaymentSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read payment settings of businesses they are active members of
-CREATE POLICY "payment_settings_select_member" ON "settings"."PaymentSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update payment settings
-CREATE POLICY "payment_settings_update_admin" ON "settings"."PaymentSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));
 
 -- SystemSettings: maintenance, debug, system-level settings.
 CREATE TABLE "settings"."SystemSettings" (
@@ -354,17 +214,3 @@ CREATE TABLE "settings"."SystemSettings" (
     "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 CREATE INDEX "SystemSettings_BusinessId_idx" ON "settings"."SystemSettings" ("BusinessId");
-
--- Enable RLS on SystemSettings
-ALTER TABLE "settings"."SystemSettings" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read system settings of businesses they are active members of
-CREATE POLICY "system_settings_select_member" ON "settings"."SystemSettings"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins can update system settings
-CREATE POLICY "system_settings_update_admin" ON "settings"."SystemSettings"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin'));

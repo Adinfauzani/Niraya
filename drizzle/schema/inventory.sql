@@ -21,24 +21,6 @@ CREATE INDEX "Inventory_BusinessId_idx" ON "inventory"."Inventory" ("BusinessId"
 CREATE INDEX "Inventory_StoreId_idx" ON "inventory"."Inventory" ("StoreId");
 CREATE INDEX "Inventory_ProductId_idx" ON "inventory"."Inventory" ("ProductId");
 
--- Enable RLS on Inventory
-ALTER TABLE "inventory"."Inventory" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read inventory of businesses they are active members of
-CREATE POLICY "inventory_select_member" ON "inventory"."Inventory"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers/cashiers can insert inventory records
-CREATE POLICY "inventory_insert_staff" ON "inventory"."Inventory"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
-
--- Policy: business owners/admins/managers/cashiers can update inventory
-CREATE POLICY "inventory_update_staff" ON "inventory"."Inventory"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
 
 -- StockMovements: ledger of every stock change; never deleted when a product is archived.
 CREATE TABLE "inventory"."StockMovements" (
@@ -66,18 +48,6 @@ CREATE INDEX "StockMovements_ProductId_idx" ON "inventory"."StockMovements" ("Pr
 CREATE INDEX "StockMovements_CreatedAt_idx" ON "inventory"."StockMovements" ("CreatedAt");
 CREATE INDEX "StockMovements_ReferenceId_idx" ON "inventory"."StockMovements" ("ReferenceId");
 
--- Enable RLS on StockMovements
-ALTER TABLE "inventory"."StockMovements" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read stock movements of businesses they are active members of
-CREATE POLICY "stock_movements_select_member" ON "inventory"."StockMovements"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers/cashiers can insert stock movements
-CREATE POLICY "stock_movements_insert_staff" ON "inventory"."StockMovements"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
 
 -- StockAdjustments: manual adjustments with a reason.
 CREATE TABLE "inventory"."StockAdjustments" (
@@ -99,24 +69,6 @@ CREATE INDEX "StockAdjustments_StoreId_idx" ON "inventory"."StockAdjustments" ("
 CREATE INDEX "StockAdjustments_ProductId_idx" ON "inventory"."StockAdjustments" ("ProductId");
 CREATE INDEX "StockAdjustments_CreatedAt_idx" ON "inventory"."StockAdjustments" ("CreatedAt");
 
--- Enable RLS on StockAdjustments
-ALTER TABLE "inventory"."StockAdjustments" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read stock adjustments of businesses they are active members of
-CREATE POLICY "stock_adjustments_select_member" ON "inventory"."StockAdjustments"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers can insert stock adjustments
-CREATE POLICY "stock_adjustments_insert_manager" ON "inventory"."StockAdjustments"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
-
--- Policy: business owners/admins/managers can update stock adjustments
-CREATE POLICY "stock_adjustments_update_manager" ON "inventory"."StockAdjustments"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
 
 -- Reservations: stock held for orders until released or converted.
 CREATE TABLE "inventory"."Reservations" (
@@ -141,22 +93,3 @@ CREATE INDEX "Reservations_OrderId_idx" ON "inventory"."Reservations" ("OrderId"
 CREATE INDEX "Reservations_ProductId_idx" ON "inventory"."Reservations" ("ProductId");
 CREATE INDEX "Reservations_Status_idx" ON "inventory"."Reservations" ("Status");
 CREATE INDEX "Reservations_ExpiresAt_idx" ON "inventory"."Reservations" ("ExpiresAt");
-
--- Enable RLS on Reservations
-ALTER TABLE "inventory"."Reservations" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read reservations of businesses they are active members of
-CREATE POLICY "reservations_select_member" ON "inventory"."Reservations"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers/cashiers can insert reservations
-CREATE POLICY "reservations_insert_staff" ON "inventory"."Reservations"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
-
--- Policy: business owners/admins/managers/cashiers can update reservations
-CREATE POLICY "reservations_update_staff" ON "inventory"."Reservations"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));

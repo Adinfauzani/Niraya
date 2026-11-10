@@ -20,24 +20,6 @@ CREATE INDEX "Customers_Phone_idx" ON "customers"."Customers" ("Phone");
 CREATE INDEX "Customers_Email_idx" ON "customers"."Customers" ("Email");
 CREATE INDEX "Customers_Name_idx" ON "customers"."Customers" ("Name");
 
--- Enable RLS on Customers
-ALTER TABLE "customers"."Customers" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read customers of businesses they are active members of
-CREATE POLICY "customers_select_member" ON "customers"."Customers"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers/cashiers can insert customers
-CREATE POLICY "customers_insert_staff" ON "customers"."Customers"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
-
--- Policy: business owners/admins/managers/cashiers can update customers
-CREATE POLICY "customers_update_staff" ON "customers"."Customers"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager') OR "core"."has_business_role"("BusinessId", 'cashier'));
 
 -- CustomerAddresses: a customer may have multiple addresses.
 CREATE TABLE "customers"."CustomerAddresses" (
@@ -58,38 +40,3 @@ CREATE TABLE "customers"."CustomerAddresses" (
 );
 CREATE INDEX "CustomerAddresses_CustomerId_idx" ON "customers"."CustomerAddresses" ("CustomerId");
 CREATE INDEX "CustomerAddresses_IsPrimary_idx" ON "customers"."CustomerAddresses" ("IsPrimary");
-
--- Enable RLS on CustomerAddresses
-ALTER TABLE "customers"."CustomerAddresses" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read customer addresses of businesses they are active members of
-CREATE POLICY "customer_addresses_select_member" ON "customers"."CustomerAddresses"
-    FOR SELECT TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "customers"."Customers" c
-      WHERE c."Id" = "CustomerAddresses"."CustomerId"
-        AND "core"."is_business_member"(c."BusinessId")
-    ));
-
--- Policy: business owners/admins/managers/cashiers can insert customer addresses
-CREATE POLICY "customer_addresses_insert_staff" ON "customers"."CustomerAddresses"
-    FOR INSERT TO authenticated
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "customers"."Customers" c
-      WHERE c."Id" = "CustomerAddresses"."CustomerId"
-        AND ("core"."has_business_role"(c."BusinessId", 'owner') OR "core"."has_business_role"(c."BusinessId", 'admin') OR "core"."has_business_role"(c."BusinessId", 'manager') OR "core"."has_business_role"(c."BusinessId", 'cashier'))
-    ));
-
--- Policy: business owners/admins/managers/cashiers can update customer addresses
-CREATE POLICY "customer_addresses_update_staff" ON "customers"."CustomerAddresses"
-    FOR UPDATE TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "customers"."Customers" c
-      WHERE c."Id" = "CustomerAddresses"."CustomerId"
-        AND ("core"."has_business_role"(c."BusinessId", 'owner') OR "core"."has_business_role"(c."BusinessId", 'admin') OR "core"."has_business_role"(c."BusinessId", 'manager') OR "core"."has_business_role"(c."BusinessId", 'cashier'))
-    ))
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "customers"."Customers" c
-      WHERE c."Id" = "CustomerAddresses"."CustomerId"
-        AND ("core"."has_business_role"(c."BusinessId", 'owner') OR "core"."has_business_role"(c."BusinessId", 'admin') OR "core"."has_business_role"(c."BusinessId", 'manager') OR "core"."has_business_role"(c."BusinessId", 'cashier'))
-    ));

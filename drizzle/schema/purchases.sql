@@ -30,24 +30,6 @@ CREATE INDEX "PurchaseOrders_SupplierId_idx" ON "purchases"."PurchaseOrders" ("S
 CREATE INDEX "PurchaseOrders_Status_idx" ON "purchases"."PurchaseOrders" ("Status");
 CREATE INDEX "PurchaseOrders_OrderDate_idx" ON "purchases"."PurchaseOrders" ("OrderDate");
 
--- Enable RLS on PurchaseOrders
-ALTER TABLE "purchases"."PurchaseOrders" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read purchase orders of businesses they are active members of
-CREATE POLICY "purchase_orders_select_member" ON "purchases"."PurchaseOrders"
-    FOR SELECT TO authenticated
-    USING ("core"."is_business_member"("BusinessId"));
-
--- Policy: business owners/admins/managers can insert purchase orders
-CREATE POLICY "purchase_orders_insert_manager" ON "purchases"."PurchaseOrders"
-    FOR INSERT TO authenticated
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
-
--- Policy: business owners/admins/managers can update purchase orders
-CREATE POLICY "purchase_orders_update_manager" ON "purchases"."PurchaseOrders"
-    FOR UPDATE TO authenticated
-    USING ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'))
-    WITH CHECK ("core"."has_business_role"("BusinessId", 'owner') OR "core"."has_business_role"("BusinessId", 'admin') OR "core"."has_business_role"("BusinessId", 'manager'));
 
 -- PurchaseOrderItems: line items for a purchase order.
 CREATE TABLE "purchases"."PurchaseOrderItems" (
@@ -70,40 +52,6 @@ CREATE TABLE "purchases"."PurchaseOrderItems" (
 CREATE INDEX "PurchaseOrderItems_PurchaseOrderId_idx" ON "purchases"."PurchaseOrderItems" ("PurchaseOrderId");
 CREATE INDEX "PurchaseOrderItems_ProductId_idx" ON "purchases"."PurchaseOrderItems" ("ProductId");
 
--- Enable RLS on PurchaseOrderItems
-ALTER TABLE "purchases"."PurchaseOrderItems" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read purchase order items of businesses they are active members of
-CREATE POLICY "purchase_order_items_select_member" ON "purchases"."PurchaseOrderItems"
-    FOR SELECT TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "PurchaseOrderItems"."PurchaseOrderId"
-        AND "core"."is_business_member"(po."BusinessId")
-    ));
-
--- Policy: business owners/admins/managers can insert purchase order items
-CREATE POLICY "purchase_order_items_insert_manager" ON "purchases"."PurchaseOrderItems"
-    FOR INSERT TO authenticated
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "PurchaseOrderItems"."PurchaseOrderId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ));
-
--- Policy: business owners/admins/managers can update purchase order items
-CREATE POLICY "purchase_order_items_update_manager" ON "purchases"."PurchaseOrderItems"
-    FOR UPDATE TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "PurchaseOrderItems"."PurchaseOrderId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ))
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "PurchaseOrderItems"."PurchaseOrderId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ));
 
 -- GoodsReceipts: receipts against a purchase order.
 CREATE TABLE "purchases"."GoodsReceipts" (
@@ -122,40 +70,6 @@ CREATE TABLE "purchases"."GoodsReceipts" (
 CREATE INDEX "GoodsReceipts_PurchaseOrderId_idx" ON "purchases"."GoodsReceipts" ("PurchaseOrderId");
 CREATE INDEX "GoodsReceipts_ReceivedAt_idx" ON "purchases"."GoodsReceipts" ("ReceivedAt");
 
--- Enable RLS on GoodsReceipts
-ALTER TABLE "purchases"."GoodsReceipts" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read goods receipts of businesses they are active members of
-CREATE POLICY "goods_receipts_select_member" ON "purchases"."GoodsReceipts"
-    FOR SELECT TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "GoodsReceipts"."PurchaseOrderId"
-        AND "core"."is_business_member"(po."BusinessId")
-    ));
-
--- Policy: business owners/admins/managers can insert goods receipts
-CREATE POLICY "goods_receipts_insert_manager" ON "purchases"."GoodsReceipts"
-    FOR INSERT TO authenticated
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "GoodsReceipts"."PurchaseOrderId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ));
-
--- Policy: business owners/admins/managers can update goods receipts
-CREATE POLICY "goods_receipts_update_manager" ON "purchases"."GoodsReceipts"
-    FOR UPDATE TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "GoodsReceipts"."PurchaseOrderId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ))
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "purchases"."PurchaseOrders" po
-      WHERE po."Id" = "GoodsReceipts"."PurchaseOrderId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ));
 
 -- GoodsReceiptItems: received quantities linked to purchase order items.
 CREATE TABLE "purchases"."GoodsReceiptItems" (
@@ -172,26 +86,3 @@ CREATE TABLE "purchases"."GoodsReceiptItems" (
 CREATE INDEX "GoodsReceiptItems_GoodsReceiptId_idx" ON "purchases"."GoodsReceiptItems" ("GoodsReceiptId");
 CREATE INDEX "GoodsReceiptItems_PurchaseOrderItemId_idx" ON "purchases"."GoodsReceiptItems" ("PurchaseOrderItemId");
 CREATE INDEX "GoodsReceiptItems_ProductId_idx" ON "purchases"."GoodsReceiptItems" ("ProductId");
-
--- Enable RLS on GoodsReceiptItems
-ALTER TABLE "purchases"."GoodsReceiptItems" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read goods receipt items of businesses they are active members of
-CREATE POLICY "goods_receipt_items_select_member" ON "purchases"."GoodsReceiptItems"
-    FOR SELECT TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM "purchases"."GoodsReceipts" gr
-      JOIN "purchases"."PurchaseOrders" po ON po."Id" = gr."PurchaseOrderId"
-      WHERE gr."Id" = "GoodsReceiptItems"."GoodsReceiptId"
-        AND "core"."is_business_member"(po."BusinessId")
-    ));
-
--- Policy: business owners/admins/managers can insert goods receipt items
-CREATE POLICY "goods_receipt_items_insert_manager" ON "purchases"."GoodsReceiptItems"
-    FOR INSERT TO authenticated
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM "purchases"."GoodsReceipts" gr
-      JOIN "purchases"."PurchaseOrders" po ON po."Id" = gr."PurchaseOrderId"
-      WHERE gr."Id" = "GoodsReceiptItems"."GoodsReceiptId"
-        AND ("core"."has_business_role"(po."BusinessId", 'owner') OR "core"."has_business_role"(po."BusinessId", 'admin') OR "core"."has_business_role"(po."BusinessId", 'manager'))
-    ));

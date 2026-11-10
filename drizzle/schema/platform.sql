@@ -27,20 +27,8 @@ CREATE TABLE "platform"."Plans" (
 CREATE INDEX "Plans_Tier_idx" ON "platform"."Plans" ("Tier");
 CREATE INDEX "Plans_Recurrence_idx" ON "platform"."Plans" ("Recurrence");
 
--- Enable RLS on Plans
-ALTER TABLE "platform"."Plans" ENABLE ROW LEVEL SECURITY;
 
--- Policy: anyone (including anonymous) can read active plans
-CREATE POLICY "plans_select_public" ON "platform"."Plans"
-    FOR SELECT TO anon, authenticated
-    USING ("IsActive" = true);
-
--- Policy: authenticated admins can manage plans (requires service role or platform admin)
 -- Note: This assumes a platform_admin role or service role for plan management
-CREATE POLICY "plans_manage_admin" ON "platform"."Plans"
-    FOR ALL TO authenticated
-    USING (auth.jwt() ->> 'role' = 'service_role')
-    WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
 
 -- Subscriptions: local mirror of a Gumroad membership.
 -- BusinessId is nullable until the buyer claims the subscription.
@@ -73,24 +61,6 @@ CREATE INDEX "Subscriptions_BusinessId_idx" ON "platform"."Subscriptions" ("Busi
 CREATE INDEX "Subscriptions_PurchaserEmail_idx" ON "platform"."Subscriptions" ("PurchaserEmail");
 CREATE INDEX "Subscriptions_Status_idx" ON "platform"."Subscriptions" ("Status");
 
--- Enable RLS on Subscriptions
-ALTER TABLE "platform"."Subscriptions" ENABLE ROW LEVEL SECURITY;
-
--- Policy: authenticated users can read their own subscription by email match
-CREATE POLICY "subscriptions_select_own_email" ON "platform"."Subscriptions"
-    FOR SELECT TO authenticated
-    USING ("PurchaserEmail" = auth.jwt() ->> 'email');
-
--- Policy: authenticated users can read subscription for their business (if claimed)
-CREATE POLICY "subscriptions_select_business" ON "platform"."Subscriptions"
-    FOR SELECT TO authenticated
-    USING ("BusinessId" IS NOT NULL AND "core"."is_business_member"("BusinessId"));
-
--- Policy: service role can manage all subscriptions (webhook processing)
-CREATE POLICY "subscriptions_manage_service" ON "platform"."Subscriptions"
-    FOR ALL TO authenticated
-    USING (auth.jwt() ->> 'role' = 'service_role')
-    WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
 
 -- WebhookEvents: raw Gumroad payloads for idempotency and replay.
 CREATE TABLE "platform"."WebhookEvents" (
@@ -110,12 +80,3 @@ CREATE TABLE "platform"."WebhookEvents" (
 );
 CREATE INDEX "WebhookEvents_ProviderSubscriptionId_idx" ON "platform"."WebhookEvents" ("ProviderSubscriptionId");
 CREATE INDEX "WebhookEvents_Status_idx" ON "platform"."WebhookEvents" ("Status");
-
--- Enable RLS on WebhookEvents
-ALTER TABLE "platform"."WebhookEvents" ENABLE ROW LEVEL SECURITY;
-
--- Policy: only service role can access webhook events (security sensitive)
-CREATE POLICY "webhook_events_service_only" ON "platform"."WebhookEvents"
-    FOR ALL TO authenticated
-    USING (auth.jwt() ->> 'role' = 'service_role')
-    WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
