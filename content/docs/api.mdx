@@ -1,0 +1,92 @@
+---
+title: API
+description: "Referensi endpoint Niraya POS: dispatcher bisnis, checkout kasir, storefront publik, dan webhook billing."
+---
+
+Niraya menyediakan endpoint internal untuk aplikasi web dan endpoint publik untuk storefront. Semua endpoint memakai format JSON dan mengembalikan kode status HTTP standar.
+
+<Callout type="warn" title="Autentikasi wajib">
+  Endpoint yang diawali `/api/business`, `/api/pos`, dan `/api/staff` memerlukan sesi pengguna
+  yang sah. Endpoint publik hanya mengakses data toko yang sesuai.
+</Callout>
+
+## Dispatcher bisnis
+
+Sebagian besar operasi tulis menggunakan satu endpoint dengan parameter `action`. Ini menyederhanakan klien dan menjaga konsistensi validasi.
+
+```ts title="POST /api/business"
+{
+  "action": "product.create",
+  "payload": {
+    "name": "Kopi Susu",
+    "price": 18000,
+    "categoryId": "cat_123"
+  }
+}
+```
+
+### Action yang tersedia
+
+| Action                 | Fungsi                                  |
+| ---------------------- | --------------------------------------- |
+| `category.create`      | Membuat kategori baru.                  |
+| `category.update`      | Mengubah nama atau urutan kategori.     |
+| `category.delete`      | Menghapus kategori.                     |
+| `product.create`       | Menambah produk baru.                   |
+| `product.update`       | Mengubah detail produk.                 |
+| `product.status`       | Mengaktifkan atau menonaktifkan produk. |
+| `product.delete`       | Menghapus produk.                       |
+| `stock.adjust`         | Menyesuaikan stok dengan alasan.        |
+| `transaction.void`     | Membatalkan transaksi.                  |
+| `store.create`         | Menambah cabang toko.                   |
+| `store.update`         | Mengubah data cabang.                   |
+| `store.delete`         | Menghapus cabang.                       |
+| `staff.create`         | Menambah anggota tim.                   |
+| `staff.update`         | Mengubah peran anggota.                 |
+| `staff.delete`         | Menghapus anggota tim.                  |
+| `customer.create`      | Menambah pelanggan.                     |
+| `customer.update`      | Mengubah data pelanggan.                |
+| `customer.delete`      | Menghapus pelanggan.                    |
+
+## Checkout kasir
+
+Checkout memvalidasi stok, harga, dan pajak di sisi server. Sertakan kunci idempotensi agar pengiriman ulang tidak membuat transaksi ganda.
+
+```ts title="POST /api/pos/checkout"
+{
+  "items": [{ "productId": "prod_123", "quantity": 2 }],
+  "paymentMethod": "cash",
+  "idempotencyKey": "b1f4c2e8-..."
+}
+```
+
+## Storefront publik
+
+Halaman menu publik mengambil katalog melalui endpoint publik. Endpoint ini tidak memerlukan sesi karena hanya mengekspos data toko yang memang ditampilkan ke pelanggan.
+
+- `GET /api/public/storefront/catalog`
+- `GET /api/public/storefront/context`
+- `POST /api/public/storefront/checkout`
+
+## Webhook billing
+
+Status langganan disinkronkan dari Gumroad melalui webhook. Setiap kejadian dicatat agar tidak diproses dua kali.
+
+```ts title="POST /api/webhooks/gumroad"
+{
+  "event": "sale",
+  "product_id": "prod_plan_plus",
+  "email": "pemilik@usaha.id"
+}
+```
+
+## Kode status
+
+| Status | Arti                                          |
+| ------ | --------------------------------------------- |
+| `200`  | Permintaan berhasil.                          |
+| `400`  | Data tidak valid.                             |
+| `401`  | Belum terautentikasi.                         |
+| `403`  | Peran pengguna tidak diizinkan.               |
+| `409`  | Konflik, misalnya stok tidak mencukupi.       |
+| `503`  | Aplikasi sedang dalam mode pemeliharaan.      |

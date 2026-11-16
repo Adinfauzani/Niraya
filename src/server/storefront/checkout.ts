@@ -17,7 +17,14 @@ import {
 } from "@/server/db/schema";
 import { createGuestAccessInTx } from "@/server/storefront/GuestAccess";
 
-async function loadDefaultBusinessAndStore(tx: any): Promise<{ businessId: string; storeId: string }> {
+async function loadBusinessAndStore(tx: any, storeId?: string | null): Promise<{ businessId: string; storeId: string }> {
+  if (storeId) {
+    const [store] = await tx.select({ id: stores.id, businessId: stores.businessId }).from(stores).where(and(eq(stores.id, storeId), eq(stores.isActive, true))).limit(1);
+    if (!store) throw Object.assign(new Error("Toko tidak ditemukan."), { status: 404 });
+    const [business] = await tx.select({ id: businesses.id }).from(businesses).where(and(eq(businesses.id, store.businessId), eq(businesses.status, "active"))).limit(1);
+    if (!business) throw Object.assign(new Error("Toko tidak ditemukan."), { status: 404 });
+    return { businessId: business.id, storeId: store.id };
+  }
   const [business] = await tx.select({ id: businesses.id }).from(businesses).where(eq(businesses.status, "active")).limit(1);
   if (!business) throw Object.assign(new Error("Tidak ada bisnis aktif."), { status: 503 });
   const [store] = await tx.select({ id: stores.id }).from(stores).where(and(eq(stores.businessId, business.id), eq(stores.isActive, true))).limit(1);
@@ -27,6 +34,7 @@ async function loadDefaultBusinessAndStore(tx: any): Promise<{ businessId: strin
 
 export type StorefrontCheckoutInput = {
   idempotencyKey: string;
+  storeId?: string | null;
   items: { productId: string; variantId?: string | null; quantity: number; notes?: string }[];
   paymentMethod: "manual_transfer";
   orderType?: "dine-in" | "takeaway";
@@ -42,7 +50,7 @@ function generateOrderNumber() {
 export function hashStorefrontRequest(input: StorefrontCheckoutInput) {
   const items = [...input.items].sort((a,b)=> (a.productId+(a.variantId||'')).localeCompare(b.productId+(b.variantId||'')));
   return crypto.createHash("sha256").update(JSON.stringify({
-    source: "STOREFRONT", items, paymentMethod: input.paymentMethod, orderType: input.orderType,
+    source: "STOREFRONT", storeId: input.storeId ?? null, items, paymentMethod: input.paymentMethod, orderType: input.orderType,
     notes: input.notes, customer: { mode: input.customer.mode, name: input.customer.name, phone: input.customer.phone, email: input.customer.email ?? null },
   })).digest("hex");
 }
@@ -53,7 +61,9 @@ async function loadCheckoutSettings(tx: any) {
     const r = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
     if (r) return { manualTransferEnabled: !!r.manual, taxRate: r.tax_rate != null ? Number(r.tax_rate) : null, expiryMinutes: r.expiry != null ? Number(r.expiry) : 30, instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null } };
   } catch {}
-  return { manualTransferEnabled: false, taxRate: null, expiryMinutes: 30, instructions: { bankName: null, accountName: null, accountNumber: null, instructions: null } };
+  // Default aktif bila setting belum dibuat, agar checkout storefront langsung
+  // dapat digunakan. Bisnis dapat menonaktifkannya lewat "Transfer manual".
+  return { manualTransferEnabled: true, taxRate: null, expiryMinutes: 30, instructions: { bankName: null, accountName: null, accountNumber: null, instructions: null } };
 }
 
 /** Direct public storefront checkout. No QR token, no dining table context. DiningTableId always NULL.
@@ -77,7 +87,7 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
     }
     const settings = await loadCheckoutSettings(tx);
     if (!settings.manualTransferEnabled) throw Object.assign(new Error("Pembayaran transfer manual belum diaktifkan."), { status: 403 });
-    const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadDefaultBusinessAndStore(tx);
+    const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadBusinessAndStore(tx, input.storeId);
 
     const productRows = await tx.select().from(products).where(inArray(products.id, productIds)).orderBy(products.id).for("update");
     const invRows = await tx.select().from(inventory).where(and(eq(inventory.storeId, defaultStoreId), inArray(inventory.productId, productIds))).orderBy(inventory.productId).for("update");

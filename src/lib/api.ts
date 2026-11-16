@@ -136,11 +136,14 @@ export type LoginUserRow = {
   updatedAt: string | null
 }
 
-export async function fetchLoginUsers(): Promise<LoginUserRow[]> {
+export async function fetchLoginUsers(): Promise<{ users: LoginUserRow[]; storeCode: string | null }> {
   const response = await fetch("/api/staff/users", { cache: "no-store", credentials: "include" })
-  const payload = await readApiPayload<{ users?: LoginUserRow[] } & ApiErrorPayload>(response)
+  const payload = await readApiPayload<{ users?: LoginUserRow[]; storeCode?: string | null } & ApiErrorPayload>(response)
   if (!response.ok) throw apiError(response, payload, "Gagal memuat pengguna login.")
-  return Array.isArray(payload?.users) ? payload.users : []
+  return {
+    users: Array.isArray(payload?.users) ? payload.users : [],
+    storeCode: payload?.storeCode ?? null,
+  }
 }
 
 export async function updateLoginUserRole(userId: string, role: LoginUserRow["role"]) {

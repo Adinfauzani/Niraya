@@ -127,6 +127,15 @@ async function requireSettingsAccess() {
   return { user };
 }
 
+async function getTenantIds() {
+  const { headers } = await import("next/headers");
+  const headersStore = await headers();
+  return {
+    businessId: headersStore.get("x-tenant-business-id"),
+    storeId: headersStore.get("x-tenant-store-id"),
+  };
+}
+
 async function loadTableOrNull(table: any, where: any) {
   try {
     const [row] = await db.select().from(table).where(where).limit(1);
@@ -143,10 +152,8 @@ export async function GET() {
     if ((auth as any).error) return (auth as any).error;
 
     // Use tenant context from middleware headers instead of DEFAULT_BUSINESS_ID
-    const { headers } = await import("next/headers");
-    const headersStore = await headers();
-    const businessId = headersStore.get("x-tenant-business-id");
-    const storeId = headersStore.get("x-tenant-store-id");
+    const { businessId, storeId } = await getTenantIds();
+    const settingsId = businessId || "default";
 
     const [
       profile,
@@ -160,14 +167,14 @@ export async function GET() {
       receipt,
       business,
     ] = await Promise.all([
-      loadTableOrNull(businessProfile, eq(businessProfile.id, "default")),
-      loadTableOrNull(notificationSettings, eq(notificationSettings.id, "default")),
-      loadTableOrNull(privacySecuritySettings, eq(privacySecuritySettings.id, "default")),
-      loadTableOrNull(accountSettings, eq(accountSettings.id, "default")),
-      loadTableOrNull(appearanceSettings, eq(appearanceSettings.id, "default")),
-      loadTableOrNull(operationalSettings, eq(operationalSettings.id, "default")),
-      loadTableOrNull(paymentSettings, eq(paymentSettings.id, "default")),
-      loadTableOrNull(systemSettings, eq(systemSettings.id, "default")),
+      loadTableOrNull(businessProfile, eq(businessProfile.id, settingsId)),
+      loadTableOrNull(notificationSettings, eq(notificationSettings.id, settingsId)),
+      loadTableOrNull(privacySecuritySettings, eq(privacySecuritySettings.id, settingsId)),
+      loadTableOrNull(accountSettings, eq(accountSettings.id, settingsId)),
+      loadTableOrNull(appearanceSettings, eq(appearanceSettings.id, settingsId)),
+      loadTableOrNull(operationalSettings, eq(operationalSettings.id, settingsId)),
+      loadTableOrNull(paymentSettings, eq(paymentSettings.id, settingsId)),
+      loadTableOrNull(systemSettings, eq(systemSettings.id, settingsId)),
       loadTableOrNull(receiptSettings, and(
         eq(receiptSettings.businessId, businessId || "00000000-0000-0000-0000-000000000001"),
         eq(receiptSettings.storeId, storeId || "00000000-0000-0000-0000-000000000002")
@@ -285,12 +292,18 @@ export async function PATCH(request: Request) {
   const payload = body?.payload;
   const now = new Date();
 
+  const { businessId } = await getTenantIds();
+  if (!businessId) {
+    return NextResponse.json({ error: "Konteks bisnis tidak ditemukan. Silakan muat ulang halaman." }, { status: 400 });
+  }
+  const settingsId = businessId;
+
   try {
     if (section === "profile") {
       const v = profileSchema.parse(payload);
       await db
         .insert(businessProfile)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: businessProfile.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
@@ -298,7 +311,7 @@ export async function PATCH(request: Request) {
       const v = notificationSchema.parse(payload);
       await db
         .insert(notificationSettings)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: notificationSettings.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
@@ -306,7 +319,7 @@ export async function PATCH(request: Request) {
       const v = privacySecuritySchema.parse(payload);
       await db
         .insert(privacySecuritySettings)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: privacySecuritySettings.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
@@ -314,7 +327,7 @@ export async function PATCH(request: Request) {
       const v = accountSchema.parse(payload);
       await db
         .insert(accountSettings)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: accountSettings.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
@@ -322,7 +335,7 @@ export async function PATCH(request: Request) {
       const v = appearanceSchema.parse(payload);
       await db
         .insert(appearanceSettings)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: appearanceSettings.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
@@ -331,6 +344,8 @@ export async function PATCH(request: Request) {
       await db
         .insert(operationalSettings)
         .values({
+          id: settingsId,
+          businessId,
           currency: v.currency,
           timezone: v.timezone,
           taxRate: String(moneyPercentToRate(v.taxRatePercent)),
@@ -358,7 +373,7 @@ export async function PATCH(request: Request) {
       const v = paymentSchema.parse(payload);
       await db
         .insert(paymentSettings)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: paymentSettings.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
@@ -366,19 +381,17 @@ export async function PATCH(request: Request) {
       const v = systemSchema.parse(payload);
       await db
         .insert(systemSettings)
-        .values({ ...v, updatedAt: now } as any)
+        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: systemSettings.id, set: { ...v, updatedAt: now } });
       return NextResponse.json({ ok: true, section });
     }
     if (section === "receipt") {
       const v = receiptSchema.parse(payload);
-      const { headers } = await import("next/headers");
-      const headersStore = await headers();
-      const businessId = headersStore.get("x-tenant-business-id") || "00000000-0000-0000-0000-000000000001";
-      const storeId = headersStore.get("x-tenant-store-id") || "00000000-0000-0000-0000-000000000002";
-      const [existing] = await db.select({ id: receiptSettings.id }).from(receiptSettings).where(and(eq(receiptSettings.businessId, businessId), eq(receiptSettings.storeId, storeId))).limit(1);
+      const { storeId } = await getTenantIds();
+      const receiptStoreId = storeId || "00000000-0000-0000-0000-000000000002";
+      const [existing] = await db.select({ id: receiptSettings.id }).from(receiptSettings).where(and(eq(receiptSettings.businessId, businessId), eq(receiptSettings.storeId, receiptStoreId))).limit(1);
       if (existing) await db.update(receiptSettings).set({ footer: v.receiptFooter, updatedAt: now }).where(eq(receiptSettings.id, existing.id));
-      else await db.insert(receiptSettings).values({ businessId, storeId, footer: v.receiptFooter, updatedAt: now } as any);
+      else await db.insert(receiptSettings).values({ businessId, storeId: receiptStoreId, footer: v.receiptFooter, updatedAt: now } as any);
       return NextResponse.json({ ok: true, section });
     }
     return NextResponse.json({ error: "Bagian pengaturan tidak valid." }, { status: 400 });

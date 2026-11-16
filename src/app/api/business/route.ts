@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/server/db";
-import { stores } from "@/server/db/schema";
-import { getSession } from "@/lib/auth";
 import { getBusinessData } from "@/server/business/service";
 import {
   createCategory,
@@ -30,17 +25,20 @@ import {
 } from "@/server/services/StaffService";
 import { adjustStock } from "@/server/services/StockService";
 import { voidTransaction } from "@/server/services/TransactionService";
+import { updateOrderStatus } from "@/server/services/OrderService";
 import {
   createStore,
   updateStore,
   deleteStore,
 } from "@/server/services/StoreService";
 import {
-  ensureUserProfile,
   requireRole,
   ACTION_ROLES,
 } from "@/server/auth/session";
-import { getBusinessContext, getActiveBusinessIds } from "@/server/auth/BusinessContext";
+import {
+  requireBusinessContext,
+  requireSession,
+} from "@/server/auth/routeContext";
 import { getMaintenanceConfig, resolveEstimatedEndAt } from "@/server/maintenance";
 
 async function checkMaintenanceMode(): Promise<{ enabled: boolean; startedAt: Date | null; estimatedEndAt: Date | null }> {
@@ -55,66 +53,50 @@ async function checkMaintenanceMode(): Promise<{ enabled: boolean; startedAt: Da
   };
 }
 
-async function requireSession() {
-  const session = await getSession();
-  const user =
-    (session as any)?.user ?? (session as any)?.data?.user ?? null;
-
-  if (user?.id) await ensureUserProfile(user);
-
-  return user;
-}
-
-async function requireBusinessContext() {
-  const cookieStore = await cookies();
-  // Check for selected business/store cookies
-  const selectedBusinessId = cookieStore.get("niraya_selected_business")?.value;
-  const selectedStoreId = cookieStore.get("niraya_selected_store")?.value;
-  
-  const session = await getSession();
-  const user =
-    (session as any)?.user ?? (session as any)?.data?.user ?? null;
-
-  if (!user?.id) {
-    throw new Error("Unauthorized");
-  }
-
-  // If user has selected a specific business, verify they have access to it
-  if (selectedBusinessId) {
-    const memberships = await getActiveBusinessIds(user.id);
-    if (memberships.includes(selectedBusinessId)) {
-      // Verify store belongs to business if store is specified
-      let storeId = selectedStoreId;
-      if (storeId) {
-        const store = await db.query.stores.findFirst({
-          where: and(eq(stores.id, storeId), eq(stores.businessId, selectedBusinessId), eq(stores.isActive, true)),
-          columns: { id: true },
-        });
-        if (!store) {
-          storeId = undefined;
-        }
-      }
-      if (!storeId) {
-        // Get first active store for the business
-        const store = await db.query.stores.findFirst({
-          where: and(eq(stores.businessId, selectedBusinessId), eq(stores.isActive, true)),
-          columns: { id: true },
-        });
-        storeId = store?.id ?? "00000000-0000-0000-0000-000000000002";
-      }
-      return { businessId: selectedBusinessId, storeId };
+async function resolveBusinessContext(): Promise<
+  | { ok: true; businessId: string; storeId: string }
+  | { ok: false; response: NextResponse }
+> {
+  try {
+    const context = await requireBusinessContext();
+    if (!context.businessId || !context.storeId) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: "Belum ada bisnis aktif untuk akun ini.",
+            code: "NO_BUSINESS",
+            needsOnboarding: true,
+          },
+          { status: 409 }
+        ),
+      };
     }
+    return { ok: true, businessId: context.businessId, storeId: context.storeId };
+  } catch (error) {
+    const message = (error as Error)?.message;
+    if (message === "No active business membership found") {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: "Belum ada bisnis aktif untuk akun ini.",
+            code: "NO_BUSINESS",
+            needsOnboarding: true,
+          },
+          { status: 409 }
+        ),
+      };
+    }
+    console.error("Business context error:", message);
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Gagal memuat data bisnis.", code: "BUSINESS_CONTEXT_FAILED" },
+        { status: 500 }
+      ),
+    };
   }
-
-  const context = await getBusinessContext(user.id);
-  if (!context) {
-    throw new Error("No active business membership found");
-  }
-
-  return {
-    businessId: context.businessId,
-    storeId: context.storeId ?? "00000000-0000-0000-0000-000000000002",
-  };
 }
 
 const BusinessQuerySchema = z.object({
@@ -135,10 +117,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { businessId, storeId } = await requireBusinessContext();
+  const context = await resolveBusinessContext();
+  if (!context.ok) return context.response;
 
-  const resolvedBusinessId = businessId!;
-  const resolvedStoreId = storeId!;
+  const resolvedBusinessId = context.businessId;
+  const resolvedStoreId = context.storeId;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -194,10 +177,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const { businessId, storeId } = await requireBusinessContext();
+  const context = await resolveBusinessContext();
+  if (!context.ok) return context.response;
 
-  const resolvedBusinessId = businessId!;
-  const resolvedStoreId = storeId!;
+  const resolvedBusinessId = context.businessId;
+  const resolvedStoreId = context.storeId;
 
   try {
     const body = await request.json();
@@ -332,6 +316,17 @@ export async function POST(request: Request) {
         break;
       case "transaction.void":
         result = await voidTransaction(resolvedBusinessId, resolvedStoreId, payload.id, payload.reason);
+        break;
+      case "order.status":
+        result = await updateOrderStatus({
+          businessId: resolvedBusinessId,
+          storeId: resolvedStoreId,
+          orderId: payload.id,
+          status: payload.status,
+          changedByUserId: user.id,
+          changedByRole: (user as any)?.role ?? null,
+          reason: payload.reason,
+        });
         break;
       case "store.create":
         result = await createStore(resolvedBusinessId, {

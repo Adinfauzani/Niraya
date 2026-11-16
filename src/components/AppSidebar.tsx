@@ -8,15 +8,13 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
-  CreditCard,
   Grid3X3,
-  HelpCircle,
   LayoutDashboard,
   Package,
   PanelLeftOpen,
   Receipt,
-  Settings,
   ShoppingBag,
+  ShoppingCart,
   UserCog,
   UserCircle,
   Users,
@@ -31,18 +29,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { usePendingOrders } from "@/hooks/usePendingOrders"
 import { useRealUser } from "@/hooks/useRealUser"
+import { useBusinessStore } from "@/stores/businessStore"
 import { cn } from "@/lib/utils"
 
-interface NavItem { href: string; label: string; icon: React.ElementType }
+interface NavItem { href: string; label: string; icon: React.ElementType; badge?: number }
 interface NavGroup { key: string; title: string; collapsible: boolean; defaultOpen?: boolean; items: NavItem[] }
 
 const NAV: NavGroup[] = [
   { key: "overview", title: "Overview", collapsible: false, items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
-  { key: "sales", title: "Sales", collapsible: true, defaultOpen: true, items: [{ href: "/pos", label: "POS Terminal", icon: ShoppingBag }, { href: "/transactions", label: "Transactions", icon: Receipt }, { href: "/customers", label: "Customers", icon: Users }] },
+  { key: "sales", title: "Sales", collapsible: true, defaultOpen: true, items: [{ href: "/pos", label: "POS Terminal", icon: ShoppingBag }, { href: "/orders", label: "Orders", icon: ShoppingCart }, { href: "/transactions", label: "Transactions", icon: Receipt }, { href: "/customers", label: "Customers", icon: Users }] },
   { key: "catalog", title: "Catalog", collapsible: true, defaultOpen: true, items: [{ href: "/products", label: "Products", icon: Package }, { href: "/categories", label: "Categories", icon: Grid3X3 }, { href: "/inventory", label: "Inventory", icon: Boxes }] },
   { key: "business", title: "Business", collapsible: true, defaultOpen: true, items: [{ href: "/reports", label: "Reports", icon: BarChart3 }, { href: "/staff", label: "Staff Management", icon: UserCog }] },
-  { key: "preferences", title: "Preferences", collapsible: true, defaultOpen: true, items: [{ href: "/plans", label: "Plans & Billing", icon: CreditCard }, { href: "/settings", label: "Settings", icon: Settings }, { href: "/help", label: "Help & Support", icon: HelpCircle }] },
 ]
 
 const MIN_SIDEBAR_WIDTH = 200
@@ -59,17 +58,36 @@ export function AppSidebar({
   const userRole = realUser?.role as string | undefined
   const roleLoading = realUser === null
   const isRegularUser = userRole === "user"
-  const currentUser = { name: realUser?.name ?? "Akun", email: realUser?.email ?? "", avatar: realUser?.image ?? undefined }
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ sales: true, catalog: true, business: true, preferences: true })
+  const { count: pendingOrders } = usePendingOrders(!isRegularUser)
+  const currentUser = { name: realUser?.name ?? "Akun", email: realUser?.email ?? "", avatar: realUser?.image ?? undefined, role: userRole }
+  const availableBusinesses = useBusinessStore((state) => state.availableBusinesses)
+  const selectedBusinessId = useBusinessStore((state) => state.selectedBusinessId)
+  const currentBusiness =
+    availableBusinesses.find((b) => b.businessId === selectedBusinessId) ??
+    availableBusinesses[0] ??
+    null
+  const businessName = currentBusiness?.businessName?.trim() || "NIRAYA"
+  const businessLogoUrl = currentBusiness?.logoUrl ?? null
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ sales: true, catalog: true, business: true })
 
-  const filteredNav = isRegularUser ? [] : NAV
+  const filteredNav = isRegularUser
+    ? []
+    : NAV.map((group) => ({
+        ...group,
+        items: group.items.map((item) =>
+          item.href === "/orders" ? { ...item, badge: pendingOrders } : item,
+        ),
+      }))
 
   useEffect(() => {
     if (typeof window === "undefined") return
     if (window.matchMedia("(max-width: 767px)").matches) onToggle(true)
   }, [pathname, onToggle])
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+  const isActive = (href: string) =>
+    href === "/dashboard"
+      ? pathname === href
+      : pathname === href || pathname.startsWith(`${href}/`)
   const toggleGroup = (key: string) => setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const handleResizePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -117,7 +135,10 @@ export function AppSidebar({
                 const Icon = item.icon; const active = isActive(item.href)
                 return (
                   <Tooltip key={item.href}><TooltipTrigger asChild>
-                    <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("flex size-10 items-center justify-center rounded-lg transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : "text-muted-foreground hover:bg-accent hover:text-foreground")}><Icon className="size-5 shrink-0" /></Link>
+                    <Link href={item.href} aria-label={item.label} aria-current={active ? "page" : undefined} className={cn("relative flex size-10 items-center justify-center rounded-lg transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+                      <Icon className="size-5 shrink-0" />
+                      {item.badge ? <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-destructive ring-2 ring-sidebar" aria-hidden /> : null}
+                    </Link>
                   </TooltipTrigger><TooltipContent side="right" sideOffset={8}>{item.label}</TooltipContent></Tooltip>
                 )
               })}
@@ -133,7 +154,21 @@ export function AppSidebar({
       return (
         <div key={group.key} className="space-y-1">
           {group.collapsible ? <button type="button" onClick={() => toggleGroup(group.key)} className="w-full rounded-lg transition-colors hover:bg-accent/40" aria-expanded={groupOpen}>{header}</button> : <div>{header}</div>}
-          {groupOpen ? <div className="space-y-0.5">{group.items.map((item) => { const Icon = item.icon; const active = isActive(item.href); return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("group flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors duration-200", active ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : "text-muted-foreground hover:bg-accent hover:text-foreground")}><Icon className="size-4 shrink-0" /><span className="flex-1 truncate">{item.label}</span></Link> })}</div> : null}
+          {groupOpen ? (
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const Icon = item.icon
+                const active = isActive(item.href)
+                return (
+                  <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("group flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors duration-200", active ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+                    <Icon className="size-4 shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge ? <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold tabular-nums text-white">{item.badge > 99 ? "99+" : item.badge}</span> : null}
+                  </Link>
+                )
+              })}
+            </div>
+          ) : null}
         </div>
       )
     })
@@ -141,11 +176,25 @@ export function AppSidebar({
 
   const brandContent = collapsed ? (
     <div className="relative flex h-10 w-full items-center justify-center">
-      <Logo size="sm" label={false} className="transition-opacity duration-150 group-hover/sidebar:opacity-0" />
+      {businessLogoUrl ? (
+        <img src={businessLogoUrl} alt={businessName} className="size-7 rounded-lg object-cover transition-opacity duration-150 group-hover/sidebar:opacity-0" />
+      ) : (
+        <Logo size="sm" label={false} className="transition-opacity duration-150 group-hover/sidebar:opacity-0" />
+      )}
       <button type="button" onClick={() => onToggle(false)} aria-label="Buka sidebar" title="Buka sidebar" className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-opacity duration-150 hover:bg-accent hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/sidebar:pointer-events-auto group-hover/sidebar:opacity-100"><PanelLeftOpen className="size-5" /></button>
     </div>
   ) : (
-    <button type="button" onClick={() => onToggle(true)} className="flex w-full shrink-0 items-center justify-between rounded-xl p-3 transition-colors duration-200 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Tutup sidebar" title="Tutup sidebar"><Logo size="md" /></button>
+    <button type="button" onClick={() => onToggle(true)} className="flex w-full shrink-0 items-center gap-2 rounded-xl p-2 text-left transition-colors duration-200 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Tutup sidebar" title="Tutup sidebar">
+      {businessLogoUrl ? (
+        <img src={businessLogoUrl} alt={businessName} className="size-8 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <Logo size="md" label={false} />
+      )}
+      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="truncate text-sm font-semibold">{businessName}</span>
+        <span className="text-[10px] leading-none text-muted-foreground">Enterprise POS</span>
+      </span>
+    </button>
   )
 
   return (

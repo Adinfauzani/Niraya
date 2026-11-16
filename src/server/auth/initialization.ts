@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { businesses, stores, businessMembers, userProfiles } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { slugify } from "@/lib/utils";
+import { generateUniqueInviteCode } from "@/server/stores/invite";
 
 export interface InitializationResult {
   businessId: string;
@@ -59,33 +60,31 @@ async function generateUniqueSlug(baseName: string): Promise<string> {
 }
 
 /**
- * Check if user already has complete initialization
+ * Check if user already belongs to a business (as any active member, not just
+ * the owner). A cashier who joined via a store code is considered initialized.
  */
 export async function checkInitializationStatus(userId: string): Promise<{
   isInitialized: boolean;
   businessId: string | null;
   storeId: string | null;
+  role: string | null;
 }> {
   const membership = await db.query.businessMembers.findFirst({
     where: and(
       eq(businessMembers.userId, userId),
-      eq(businessMembers.role, "owner"),
       eq(businessMembers.status, "active")
     ),
-    with: {
-      business: true,
-      store: true,
-    },
   });
 
   if (!membership) {
-    return { isInitialized: false, businessId: null, storeId: null };
+    return { isInitialized: false, businessId: null, storeId: null, role: null };
   }
 
   return {
     isInitialized: true,
     businessId: membership.businessId,
     storeId: membership.storeId,
+    role: membership.role,
   };
 }
 
@@ -101,11 +100,13 @@ export async function initializeUserWorkspace(identity: UserIdentity): Promise<I
   const status = await checkInitializationStatus(userId);
   if (status.isInitialized && status.businessId && status.storeId) {
     // Profil sudah ada (bisa dari `ensureUserProfile` dengan role `user`).
-    // Pemilik workspace harus punya role `owner` agar akses dashboard tidak 403.
+    // Hanya pemilik workspace yang dipromosikan ke `owner`; anggota yang
+    // bergabung via kode toko mempertahankan role keanggotaannya.
     const profile = await db.query.userProfiles.findFirst({
       where: eq(userProfiles.id, userId),
     });
-    const targetRole = resolveWorkspaceRole(profile?.role);
+    const targetRole =
+      status.role === OWNER_ROLE ? OWNER_ROLE : (profile?.role ?? DEFAULT_USER_ROLE);
     const targetName = displayName || profile?.name || null;
     if (profile && (profile.role !== targetRole || (targetName && !profile.name))) {
       await db
@@ -142,7 +143,7 @@ export async function initializeUserWorkspace(identity: UserIdentity): Promise<I
     .values({
       businessId,
       name: `${displayName}'s Store`,
-      code: "MAIN",
+      code: await generateUniqueInviteCode(),
       isActive: true,
     })
     .returning({ id: stores.id });
@@ -184,6 +185,7 @@ export async function initializeUserWorkspace(identity: UserIdentity): Promise<I
       name: displayName,
       email: identity.email,
       role: "owner",
+      plan: "free",
       createdAt: new Date(),
       updatedAt: new Date(),
     });

@@ -1,0 +1,13 @@
+{
+  "title": "Dokumentasi",
+  "pages": [
+    "index",
+    "---Mulai---",
+    "getting-started",
+    "---Panduan---",
+    "pos",
+    "products",
+    "---Referensi---",
+    "api"
+  ]
+}

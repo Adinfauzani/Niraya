@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CopyIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
+  StoreIcon,
   Trash2Icon,
   UserRoundIcon,
   UsersIcon,
@@ -69,6 +71,7 @@ function readError(e: unknown, fallback: string) {
 
 export function StaffPage() {
   const [rows, setRows] = useState<LoginUserRow[]>([]);
+  const [storeCode, setStoreCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -83,11 +86,23 @@ export function StaffPage() {
     try {
       setLoading(true);
       setError(null);
-      setRows(await fetchLoginUsers());
+      const data = await fetchLoginUsers();
+      setRows(data.users);
+      setStoreCode(data.storeCode);
     } catch (e) {
       setError(readError(e, "Gagal memuat pengguna login."));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function copyStoreCode() {
+    if (!storeCode) return;
+    try {
+      await navigator.clipboard.writeText(storeCode);
+      toast.success("Kode toko disalin", { description: storeCode });
+    } catch {
+      toast.error("Gagal menyalin kode toko");
     }
   }
 
@@ -133,7 +148,7 @@ export function StaffPage() {
     setDeleting(true);
     try {
       await removeLoginUserProfile(deleteTarget.userId);
-      toast.success("Profil akses dihapus", { description: "Akun auth tidak dihapus; jika login lagi, profil dasar dapat dibuat ulang." });
+      toast.success("Anggota dikeluarkan dari toko", { description: "Akun login tetap ada; pengguna dapat bergabung kembali menggunakan kode toko." });
       setDeleteTarget(null);
       await load();
     } catch (e) {
@@ -198,7 +213,7 @@ export function StaffPage() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(row)}>
-                <Trash2Icon aria-hidden="true" />Hapus profil akses
+                <Trash2Icon aria-hidden="true" />Keluarkan dari toko
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -211,7 +226,7 @@ export function StaffPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Staff / Akses Pengguna"
-        description="Daftar akun yang pernah login (core.UserProfiles). Ubah role aplikasi dengan aman; identitas login tetap dikelola Supabase Auth."
+        description="Anggota aktif toko ini. Pengguna yang belum bergabung dengan kode toko tidak muncul di daftar. Role dapat diubah dengan aman."
         actions={
           <Button variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCwIcon className={loading ? "animate-spin" : ""} aria-hidden="true" />Muat ulang
@@ -219,10 +234,34 @@ export function StaffPage() {
         }
       />
 
+      {storeCode ? (
+        <section className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <StoreIcon aria-hidden="true" className="size-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">Kode toko untuk anggota baru</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Bagikan kode ini. Anggota yang bergabung akan muncul di daftar ini.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="rounded-lg border border-border/70 bg-background px-3 py-1.5 text-sm font-semibold tracking-wider">
+              {storeCode}
+            </code>
+            <Button variant="outline" size="sm" onClick={() => void copyStoreCode()}>
+              <CopyIcon aria-hidden="true" /> Salin
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Pengguna terdaftar" value={formatNumber(rows.length)} hint="Profil login aplikasi" icon={UsersIcon} />
+        <StatTile label="Anggota toko" value={formatNumber(rows.length)} hint="Anggota bisnis aktif" icon={UsersIcon} />
         <StatTile label="Akses operasional" value={formatNumber(activeOpsCount)} hint="Owner/admin/manager/kasir" icon={ShieldCheckIcon} tone="info" />
-        <StatTile label="User dasar" value={formatNumber(basicUserCount)} hint="Role default setelah login" icon={UserRoundIcon} />
+        <StatTile label="User dasar" value={formatNumber(basicUserCount)} hint="Role default anggota" icon={UserRoundIcon} />
         <StatTile label="Owner" value={formatNumber(ownerCount)} hint="Owner terakhir dilindungi" icon={ShieldCheckIcon} tone="warning" />
       </section>
 
@@ -249,7 +288,7 @@ export function StaffPage() {
             rows={pageRows}
             getRowKey={(row) => row.userId}
             empty={loading ? <EmptyState icon={UsersIcon} title="Memuat pengguna…" description="Mengambil data profil login." /> : (
-              <EmptyState icon={UsersIcon} title={rows.length === 0 ? "Belum ada pengguna login" : "Pengguna tidak ditemukan"} description={rows.length === 0 ? "Profil dibuat otomatis saat akun login melalui Supabase Auth." : "Coba kata kunci atau filter lain."} />
+              <EmptyState icon={UsersIcon} title={rows.length === 0 ? "Belum ada anggota toko" : "Pengguna tidak ditemukan"} description={rows.length === 0 ? "Anggota muncul setelah bergabung dengan kode toko." : "Coba kata kunci atau filter lain."} />
             )}
           />
         )}
@@ -261,7 +300,7 @@ export function StaffPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ubah role pengguna</DialogTitle>
-            <DialogDescription>Perubahan disimpan ke <code>core.UserProfiles</code>. Kredensial/login tetap di Supabase Auth.</DialogDescription>
+            <DialogDescription>Perubahan disimpan ke role anggota toko. Kredensial/login tetap dikelola Better Auth.</DialogDescription>
           </DialogHeader>
           {editing ? (
             <div className="space-y-4">
@@ -289,9 +328,9 @@ export function StaffPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title="Hapus profil akses pengguna?"
-        description={deleteTarget ? `Profil aplikasi untuk ${deleteTarget.name || deleteTarget.email || deleteTarget.userId} akan dihapus. Akun auth tidak dihapus; jika login lagi, sistem dapat membuat profil dasar baru.` : ""}
-        confirmLabel={deleting ? "Menghapus…" : "Hapus profil"}
+        title="Keluarkan anggota dari toko?"
+        description={deleteTarget ? `${deleteTarget.name || deleteTarget.email || deleteTarget.userId} akan dikeluarkan dari bisnis ini. Akun login tetap ada dan dapat bergabung kembali menggunakan kode toko.` : ""}
+        confirmLabel={deleting ? "Mengeluarkan…" : "Keluarkan"}
         destructive
         onConfirm={() => void confirmDelete()}
       />

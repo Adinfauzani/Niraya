@@ -23,6 +23,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useRealUser } from "@/hooks/useRealUser";
+import { BUSINESS_QUERY_KEY } from "@/hooks/useBusiness";
+import { useBusinessStore } from "@/stores/businessStore";
+import { queryClient } from "@/lib/queryClient";
 import { appRoleLabel } from "@/lib/businessLabels";
 import { initials } from "@/features/customers/CustomerDetailSheet";
 import { cn } from "@/lib/utils";
@@ -343,6 +346,12 @@ export function SettingsPage() {
       const fresh = await fetchSettings();
       setData(fresh);
       form.reset(values);
+      if (section === "profile") {
+        // Keep the sidebar business identity (name + logo) and the business
+        // switcher in sync with the profile just saved.
+        void useBusinessStore.getState().loadBusinesses();
+        void queryClient.invalidateQueries({ queryKey: BUSINESS_QUERY_KEY });
+      }
       toast.success("Pengaturan disimpan", { description: "Perubahan tersimpan di server." });
     } catch (e: any) {
       toast.error("Gagal menyimpan", { description: e?.message || "Silakan coba lagi." });

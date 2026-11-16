@@ -12,6 +12,14 @@ CREATE TABLE "lookups"."PaymentMethods" (
     "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 CREATE INDEX "PaymentMethods_IsActive_idx" ON "lookups"."PaymentMethods" ("IsActive");
+
+-- Core payment methods (used by POS + storefront manual transfer).
+INSERT INTO "lookups"."PaymentMethods" ("Code","Name","IsActive","RequiresReference","SortOrder") VALUES
+    ('cash','Tunai',true,false,1),
+    ('card','Kartu',true,false,2),
+    ('qris','QRIS',true,true,3),
+    ('manual_transfer','Transfer Manual',true,true,4)
+ON CONFLICT ("Code") DO NOTHING;
 CREATE INDEX "PaymentMethods_SortOrder_idx" ON "lookups"."PaymentMethods" ("SortOrder");
 
 -- TaxRates: tax rates scoped to a business.

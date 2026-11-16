@@ -35,17 +35,27 @@ export function PublicNavigation({
 
   useEffect(() => {
     // Get initial session
-    (authClient as any).getSession().then(({ data }: any) => {
-      setSession(data?.session ?? null);
-      setIsPending(false);
-    });
+    (authClient as any)
+      .getSession()
+      .then(({ data }: any) => {
+        setSession(data ?? null);
+      })
+      .catch(() => {
+        // Diamkan: status akun bersifat opsional di halaman publik.
+      })
+      .finally(() => {
+        setIsPending(false);
+      });
 
     // Listen for session changes via broadcast channel
     const channel = new BroadcastChannel("better-auth-session");
     channel.addEventListener("message", () => {
-      (authClient as any).getSession().then(({ data }: any) => {
-        setSession(data?.session ?? null);
-      });
+      (authClient as any)
+        .getSession()
+        .then(({ data }: any) => {
+          setSession(data ?? null);
+        })
+        .catch(() => {});
     });
 
     return () => channel.close();
@@ -66,7 +76,7 @@ export function PublicNavigation({
     const accountHref = isPending ? "/login" : isAuthed ? "/profile" : "/login";
     return [
       { id: "home", label: "Beranda", href: "/", icon: HomeIcon, active: pathname === "/" },
-      { id: "menu", label: "Menu", href: "/menu", icon: StoreIcon, active: pathname === "/menu" || pathname.startsWith("/menu/") },
+      { id: "menu", label: "Menu", href: "/search", icon: StoreIcon, active: pathname === "/search" || pathname.startsWith("/search/") || pathname === "/menu" || pathname.startsWith("/menu/") || pathname.endsWith("/menu") },
       { id: "plans", label: "Plans", href: "/plans", icon: SparklesIcon, active: pathname === "/plans" || pathname.startsWith("/plans/") },
       {
         id: "account",

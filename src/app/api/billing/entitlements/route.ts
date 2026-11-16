@@ -22,7 +22,7 @@ export async function GET() {
         entitlements: null,
         features: [],
         limits: {
-          maxUsers: 1,
+          maxUsers: 3,
           maxStores: 1,
           maxProducts: 10,
         }
@@ -34,7 +34,7 @@ export async function GET() {
       entitlements,
       features: entitlements.features ?? [],
       limits: {
-        maxUsers: entitlements.maxUsers ?? 1,
+        maxUsers: entitlements.maxUsers ?? 3,
         maxStores: entitlements.maxStores ?? 1,
         maxProducts: entitlements.maxProducts ?? 10,
       }

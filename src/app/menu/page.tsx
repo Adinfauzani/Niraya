@@ -1,16 +1,23 @@
-import { Suspense } from "react";
-import { StorefrontMenu } from "@/features/storefront/StorefrontMenu";
-import { PublicNavigation } from "@/components/public/PublicNavigation";
+import { redirect } from "next/navigation";
+
+import { slugifyStoreName } from "@/lib/storeSlug";
+import { resolveStoreById } from "@/server/stores/slug";
 
 export const dynamic = "force-dynamic";
 
-export default function PublicMenuPage() {
-  return (
-    <>
-      <div className="lg:pt-[57px]">
-        <Suspense fallback={<div className="p-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] text-sm text-muted-foreground">Memuat menu...</div>}><StorefrontMenu /></Suspense>
-      </div>
-      <PublicNavigation variant="mobile" />
-    </>
-  );
+/** Legacy /menu: redirect to the store menu when ?store=<id>, else to /search. */
+export default async function LegacyMenuPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ store?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const legacyStoreId = typeof params.store === "string" ? params.store : null;
+
+  if (legacyStoreId) {
+    const store = await resolveStoreById(legacyStoreId);
+    if (store) redirect(`/${slugifyStoreName(store.name)}/menu`);
+  }
+
+  redirect("/search");
 }

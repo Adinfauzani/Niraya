@@ -17,6 +17,7 @@ async function checkMaintenanceMode(): Promise<{ enabled: boolean; estimatedEndA
 
 const schema = z.object({
   idempotencyKey: z.string().min(8).max(128),
+  storeId: z.string().uuid().optional(),
   paymentMethod: z.literal("manual_transfer"),
   orderType: z.enum(["dine-in","takeaway"]).optional(),
   notes: z.string().max(500).optional(),
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const customer = user?.id
       ? { mode: "authenticated" as const, name: String(user.name || "Customer"), phone: String((user as any).phone || parsed.data.guest?.phone || ""), email: (user.email ?? null) as string|null, authUserId: String(user.id) }
       : { mode: "guest" as const, name: parsed.data.guest!.name, phone: parsed.data.guest!.phone, email: parsed.data.guest!.email || null };
-    const result = await executeStorefrontCheckout({ idempotencyKey: parsed.data.idempotencyKey, items: parsed.data.items, paymentMethod: "manual_transfer", orderType: parsed.data.orderType, notes: parsed.data.notes, customer });
+    const result = await executeStorefrontCheckout({ idempotencyKey: parsed.data.idempotencyKey, storeId: parsed.data.storeId, items: parsed.data.items, paymentMethod: "manual_transfer", orderType: parsed.data.orderType, notes: parsed.data.notes, customer });
     const raw = (result as any)._guestAccessRaw as string | undefined; delete (result as any)._guestAccessRaw;
     const res = NextResponse.json(result);
     if (raw && result.orderId && (result as any).guestAccess?.expiresAt) {

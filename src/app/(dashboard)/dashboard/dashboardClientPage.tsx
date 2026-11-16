@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -23,7 +22,6 @@ function DashboardSkeleton() {
 
 export function DashboardClientPage() {
   const router = useRouter();
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
@@ -33,10 +31,12 @@ export function DashboardClientPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.needsOnboarding === true) {
-            setNeedsOnboarding(true);
+            router.replace("/dashboard/onboarding");
+            return;
           }
         } else if (res.status === 401) {
           router.replace("/login");
+          return;
         }
       } catch {
         // Silently fail, will show error on onboarding page
@@ -49,12 +49,6 @@ export function DashboardClientPage() {
 
   // Show loading while checking
   if (!checked) {
-    return <DashboardSkeleton />;
-  }
-
-  // Redirect to onboarding if needed
-  if (needsOnboarding) {
-    router.replace("/dashboard/onboarding");
     return <DashboardSkeleton />;
   }
 

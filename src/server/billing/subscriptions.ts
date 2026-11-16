@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   businessMembers,
+  userProfiles,
   plans,
   subscriptions,
   type PlanEntitlements,
@@ -133,6 +134,41 @@ export async function resolveEntitlements(
   return row.plan.entitlements ?? null;
 }
 
+/**
+ * Sinkronkan kolom `core.UserProfiles.Plan` milik owner bisnis dari langganan
+ * aktif. Plan adalah mirror dari `platform.Plans.Tier`; jika tidak ada langganan
+ * yang bisa dipakai, plan kembali ke `free`.
+ */
+export async function syncOwnerPlanForBusiness(
+  businessId: string
+): Promise<string | null> {
+  const [owner] = await db
+    .select({ userId: businessMembers.userId })
+    .from(businessMembers)
+    .where(
+      and(
+        eq(businessMembers.businessId, businessId),
+        eq(businessMembers.role, "owner"),
+        eq(businessMembers.status, "active")
+      )
+    )
+    .limit(1);
+
+  if (!owner?.userId) return null;
+
+  const active = await getActiveSubscriptionForBusiness(businessId);
+  const usable =
+    active && isSubscriptionUsable(active.subscription) ? active : null;
+  const plan = usable?.plan.tier ?? "free";
+
+  await db
+    .update(userProfiles)
+    .set({ plan, updatedAt: new Date() })
+    .where(eq(userProfiles.id, owner.userId));
+
+  return plan;
+}
+
 export async function getBillingSummaryForUser(
   userId: string,
   email: string | null
@@ -218,6 +254,10 @@ export async function claimSubscriptionsForUser(
       )
     )
     .returning({ id: subscriptions.id });
+
+  if (updated.length > 0) {
+    await syncOwnerPlanForBusiness(businessId);
+  }
 
   return updated.length;
 }

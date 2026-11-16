@@ -46,6 +46,7 @@ export function NavUser({
     name: string
     email: string
     avatar?: string
+    role?: string
   }
   collapsed?: boolean
 }) {
@@ -149,10 +150,12 @@ export function NavUser({
           <UserCircleIcon />
           Account
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => router.push("/plans")}>
-          <CreditCardIcon />
-          Plans & Billing
-        </DropdownMenuItem>
+        {user.role && user.role !== "user" ? (
+          <DropdownMenuItem onSelect={() => router.push("/dashboard/plans")}>
+            <CreditCardIcon />
+            Plans & Billing
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={() => router.push("/settings")}>
           <SettingsIcon />
           Settings

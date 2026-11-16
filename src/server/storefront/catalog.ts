@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   businesses,
+  businessProfile,
   categories,
   inventory,
   products,
@@ -9,35 +10,122 @@ import {
   stores,
 } from "@/server/db/schema";
 
-async function loadDefaultBusinessAndStore() {
+async function loadStoreContext(storeId?: string | null) {
+  if (storeId) {
+    const [store] = await db
+      .select({
+        id: stores.id,
+        businessId: stores.businessId,
+        name: stores.name,
+        address: stores.address,
+      })
+      .from(stores)
+      .where(
+        and(
+          eq(stores.id, storeId),
+          eq(stores.isActive, true),
+          sql`${stores.deletedAt} is null`,
+        ),
+      )
+      .limit(1);
+    if (!store) {
+      throw Object.assign(new Error("Toko tidak ditemukan."), { status: 404 });
+    }
+    const [business] = await db
+      .select({ id: businesses.id, name: businesses.name, legalName: businesses.legalName })
+      .from(businesses)
+      .where(and(eq(businesses.id, store.businessId), eq(businesses.status, "active")))
+      .limit(1);
+    if (!business) {
+      throw Object.assign(new Error("Toko tidak ditemukan."), { status: 404 });
+    }
+    const [profile] = await db
+      .select({
+        businessName: businessProfile.businessName,
+        logoUrl: businessProfile.logoUrl,
+        description: businessProfile.description,
+      })
+      .from(businessProfile)
+      .where(eq(businessProfile.businessId, store.businessId))
+      .limit(1);
+    const [storeCountRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(stores)
+      .where(
+        and(
+          eq(stores.businessId, store.businessId),
+          eq(stores.isActive, true),
+          sql`${stores.deletedAt} is null`,
+        ),
+      );
+    return {
+      business: { ...business, profile: profile ?? null, storeCount: Number(storeCountRow?.count ?? 1) },
+      store: { id: store.id, name: store.name, address: store.address },
+    };
+  }
+
   const [business] = await db
     .select({ id: businesses.id, name: businesses.name, legalName: businesses.legalName })
     .from(businesses)
     .where(eq(businesses.status, "active"))
     .limit(1);
-  if (!business) return { business: null, storeId: null };
-  const [store] = await db
-    .select({ id: stores.id })
-    .from(stores)
-    .where(and(eq(stores.businessId, business.id), eq(stores.isActive, true)))
+  if (!business) return { business: null, store: null };
+  const [profile] = await db
+    .select({
+      businessName: businessProfile.businessName,
+      logoUrl: businessProfile.logoUrl,
+      description: businessProfile.description,
+    })
+    .from(businessProfile)
+    .where(eq(businessProfile.businessId, business.id))
     .limit(1);
-  return { business, storeId: store?.id ?? null };
+  const [store] = await db
+    .select({ id: stores.id, name: stores.name, address: stores.address })
+    .from(stores)
+    .where(
+      and(
+        eq(stores.businessId, business.id),
+        eq(stores.isActive, true),
+        sql`${stores.deletedAt} is null`,
+      ),
+    )
+    .limit(1);
+  const [storeCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(stores)
+    .where(
+      and(
+        eq(stores.businessId, business.id),
+        eq(stores.isActive, true),
+        sql`${stores.deletedAt} is null`,
+      ),
+    );
+  return {
+    business: { ...business, profile: profile ?? null, storeCount: Number(storeCountRow?.count ?? 1) },
+    store: store ? { id: store.id, name: store.name, address: store.address } : null,
+  };
 }
 
-/** Public storefront catalog: active categories/products for the default business.
- *  Uses server-side DB reads only; no auth, no staff-only data, no cost/internal stock counts. */
-export async function getPublicStorefrontCatalog() {
-  let manualTransferEnabled = false;
+/** Public storefront catalog. When `storeId` is given the catalog is scoped to
+ *  that store (its business + per-store inventory); otherwise the default
+ *  business/first active store is used. Uses server-side DB reads only; no auth,
+ *  no staff-only data, no cost/internal stock counts. */
+export async function getPublicStorefrontCatalog(storeId?: string | null) {
+  // Default aktif: storefront checkout (transfer manual) tersedia sampai bisnis
+  // secara eksplisit menonaktifkannya lewat setting "Transfer manual".
+  let manualTransferEnabled = true;
   try {
     const rows = await db.execute(sql`select "QrManualTransferEnabled" as manual from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
-    manualTransferEnabled = !!(rows as any)?.rows?.[0]?.manual;
+    const row = (rows as any)?.rows?.[0];
+    if (row) manualTransferEnabled = !!row.manual;
   } catch {
-    manualTransferEnabled = false;
+    manualTransferEnabled = true;
   }
-  const { business, storeId } = await loadDefaultBusinessAndStore();
-  if (!business || !storeId) {
+  const { business, store } = await loadStoreContext(storeId);
+  if (!business || !store) {
     return {
-      business: { name: "Niraya", description: null, logoUrl: null, city: null },
+      business: { name: "Niraya", description: null, logoUrl: null, city: null, storeCount: 0 },
+      store: null,
       payment: {
         storefrontCheckoutEnabled: !!manualTransferEnabled,
         manualTransferEnabled: !!manualTransferEnabled,
@@ -86,7 +174,7 @@ export async function getPublicStorefrontCatalog() {
           reservedQuantity: inventory.reservedQuantity,
         })
         .from(inventory)
-        .where(and(eq(inventory.storeId, storeId), inArray(inventory.productId, ids)))
+        .where(and(eq(inventory.storeId, store.id), inArray(inventory.productId, ids)))
     : [];
   const invBy = new Map(invRows.map((r) => [r.productId, r]));
   const varsBy = new Map<string, any[]>();
@@ -96,7 +184,14 @@ export async function getPublicStorefrontCatalog() {
     varsBy.set(v.productId, a);
   }
   return {
-    business: { name: business.name, description: null, logoUrl: null, city: null },
+    business: {
+      name: business.profile?.businessName?.trim() || business.name,
+      description: business.profile?.description?.trim() || null,
+      logoUrl: business.profile?.logoUrl ?? null,
+      city: null,
+      storeCount: business.storeCount ?? 1,
+    },
+    store: { id: store.id, name: store.name, address: store.address },
     payment: {
       storefrontCheckoutEnabled: !!manualTransferEnabled,
       manualTransferEnabled: !!manualTransferEnabled,

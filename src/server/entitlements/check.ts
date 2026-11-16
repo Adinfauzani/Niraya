@@ -1,9 +1,10 @@
 import { eq, and, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
 import { subscriptions, plans } from "@/server/db/schema/platform";
-import { businessMembers } from "@/server/db/schema/core";
+import { businessMembers, userProfiles } from "@/server/db/schema/core";
 import { stores } from "@/server/db/schema/core";
 import { products } from "@/server/db/schema/products";
+import { PLAN_DEFINITIONS } from "@/lib/plans";
 
 export type PlanEntitlements = {
   maxUsers?: number;
@@ -19,6 +20,36 @@ export interface EntitlementCheckResult {
   message?: string;
 }
 
+function entitlementsForPlan(plan: string): PlanEntitlements | null {
+  const definition = PLAN_DEFINITIONS.find((item) => item.tier === plan);
+  return definition ? definition.entitlements : null;
+}
+
+/** Plan efektif pemilik bisnis; dipakai saat belum ada langganan aktif. */
+async function getOwnerPlan(businessId: string): Promise<string> {
+  const [owner] = await db
+    .select({ userId: businessMembers.userId })
+    .from(businessMembers)
+    .where(
+      and(
+        eq(businessMembers.businessId, businessId),
+        eq(businessMembers.role, "owner"),
+        eq(businessMembers.status, "active")
+      )
+    )
+    .limit(1);
+
+  if (!owner?.userId) return "free";
+
+  const [profile] = await db
+    .select({ plan: userProfiles.plan })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, owner.userId))
+    .limit(1);
+
+  return profile?.plan ?? "free";
+}
+
 async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitlements | null> {
   const subscription = await db.query.subscriptions.findFirst({
     where: and(
@@ -28,13 +59,15 @@ async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitl
   });
 
   if (!subscription) {
-    // Return free tier entitlements when no active subscription
-    return {
-      maxUsers: 1,
-      maxStores: 1,
-      maxProducts: 50,
-      features: ["pos_basic"],
-    };
+    // Fallback ke plan pemilik bisnis (free/starter/plus/pro), lalu free tier.
+    return (
+      entitlementsForPlan(await getOwnerPlan(businessId)) ??       {
+        maxUsers: 3,
+        maxStores: 1,
+        maxProducts: 50,
+        features: ["pos", "pos_basic", "reports", "multi_store", "api"],
+      }
+    );
   }
 
   const plan = await db.query.plans.findFirst({

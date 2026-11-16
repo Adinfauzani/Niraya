@@ -16,7 +16,6 @@ export default async function OnboardingPage() {
   const membership = await db.query.businessMembers.findFirst({
     where: and(
       eq(businessMembers.userId, String(sessionUser.id)),
-      eq(businessMembers.role, "owner"),
       eq(businessMembers.status, "active")
     ),
   });

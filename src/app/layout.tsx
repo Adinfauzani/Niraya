@@ -1,11 +1,23 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Fredoka, Outfit, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { BottomNav } from "@/components/ui/BottomNav";
+
+const fredoka = Fredoka({
+  variable: "--font-fredoka",
+  subsets: ["latin"],
+  weight: "700",
+});
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
+  subsets: ["latin"],
+});
+
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
@@ -48,8 +60,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="id" suppressHydrationWarning>
       <head>
+        <script
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('niraya-theme');var p=window.location.pathname;var l=p==='/'||/^\\/(docs|plans|login|register|signup)(\\/|$)/.test(p);var d=!l&&(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches));var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();",
+          }}
+        />
         <link rel="icon" href="/favicon/favicon.ico" sizes="any" />
         <link rel="icon" href="/favicon/favicon-16x16.png" type="image/png" sizes="16x16" />
         <link rel="icon" href="/favicon/favicon-32x32.png" type="image/png" sizes="32x32" />
@@ -57,10 +76,11 @@ export default function RootLayout({
         <link rel="manifest" href="/favicon/site.webmanifest" />
       </head>
       <body
-        className={`${plusJakartaSans.variable} ${jetBrainsMono.variable} antialiased`}
+        className={`${fredoka.variable} ${outfit.variable} ${plusJakartaSans.variable} ${jetBrainsMono.variable} antialiased`}
       >
         <ThemeProvider>
           {children}
+          <BottomNav />
           <Toaster richColors closeButton position="top-center" />
         </ThemeProvider>
       </body>

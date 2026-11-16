@@ -1,7 +1,7 @@
 import { eq, and, inArray } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { businessMembers, businesses, stores } from "@/server/db/schema";
+import { businessMembers, businesses, businessProfile, stores } from "@/server/db/schema";
 import { getSession } from "@/lib/auth";
 
 export async function getActiveBusinessId(userId: string): Promise<string | null> {
@@ -42,17 +42,37 @@ export async function getActiveBusinessIds(userId: string): Promise<string[]> {
   return memberships.filter((m) => activeIds.has(m.businessId)).map((m) => m.businessId);
 }
 
-export async function getBusinessContext(userId: string): Promise<{
+export async function getBusinessContext(
+  userId: string,
+  options?: { businessId?: string | null; storeId?: string | null }
+): Promise<{
   businessId: string | null;
   storeId: string | null;
   role: string | null;
 } | null> {
-  const membership = await db.query.businessMembers.findFirst({
-    where: and(
-      eq(businessMembers.userId, userId),
-      eq(businessMembers.status, "active")
-    ),
-  });
+  const requestedBusinessId = options?.businessId ?? null;
+  const requestedStoreId = options?.storeId ?? null;
+
+  // A specific business (cookie selection) is honoured only when the user has an
+  // active membership; otherwise fall back to the user's default membership.
+  let membership = requestedBusinessId
+    ? await db.query.businessMembers.findFirst({
+        where: and(
+          eq(businessMembers.userId, userId),
+          eq(businessMembers.businessId, requestedBusinessId),
+          eq(businessMembers.status, "active")
+        ),
+      })
+    : null;
+
+  if (!membership) {
+    membership = await db.query.businessMembers.findFirst({
+      where: and(
+        eq(businessMembers.userId, userId),
+        eq(businessMembers.status, "active")
+      ),
+    });
+  }
 
   // No business membership -> free tier
   if (!membership) {
@@ -76,10 +96,23 @@ export async function getBusinessContext(userId: string): Promise<{
     };
   }
 
-  let storeId: string | null = null;
-  if (membership.storeId) {
+  // Prefer the requested store when it belongs to the business and is active.
+  let storeId: string | null = requestedStoreId ?? membership.storeId ?? null;
+  if (storeId) {
     const store = await db.query.stores.findFirst({
-      where: and(eq(stores.id, membership.storeId), eq(stores.isActive, true)),
+      where: and(
+        eq(stores.id, storeId),
+        eq(stores.businessId, membership.businessId),
+        eq(stores.isActive, true)
+      ),
+      columns: { id: true },
+    });
+    if (!store) storeId = null;
+  }
+
+  if (!storeId) {
+    const store = await db.query.stores.findFirst({
+      where: and(eq(stores.businessId, membership.businessId), eq(stores.isActive, true)),
       columns: { id: true },
     });
     storeId = store?.id ?? null;
@@ -92,7 +125,10 @@ export async function getBusinessContext(userId: string): Promise<{
   };
 }
 
-export async function requireBusinessContext(): Promise<{
+export async function requireBusinessContext(options?: {
+  businessId?: string | null;
+  storeId?: string | null;
+}): Promise<{
   businessId: string;
   storeId: string | null;
   role: string;
@@ -107,7 +143,7 @@ export async function requireBusinessContext(): Promise<{
   }
 
   const userId = String(sessionUser.id);
-  const context = await getBusinessContext(userId);
+  const context = await getBusinessContext(userId, options);
 
   if (!context || !context.businessId) {
     throw new Error("No active business membership found");
@@ -134,6 +170,7 @@ export async function getUserBusinessesWithStores(userId: string): Promise<
     businessId: string;
     businessName: string;
     businessSlug: string;
+    logoUrl: string | null;
     role: string;
     stores: Array<{ id: string; name: string; code: string; isActive: boolean }>;
   }>
@@ -153,11 +190,20 @@ export async function getUserBusinessesWithStores(userId: string): Promise<
     columns: { id: true, name: true, slug: true },
   });
 
+  // Public profile (Settings -> Business Profile) overrides the core business
+  // name and supplies the logo shown in the sidebar.
+  const profiles = await db.query.businessProfile.findMany({
+    where: inArray(businessProfile.businessId, businessIds),
+    columns: { businessId: true, businessName: true, logoUrl: true },
+  });
+  const profileMap = new Map(profiles.map((p) => [p.businessId, p]));
+
   const businessMap = new Map(activeBusinesses.map((b) => [b.id, b]));
   const result: Array<{
     businessId: string;
     businessName: string;
     businessSlug: string;
+    logoUrl: string | null;
     role: string;
     stores: Array<{ id: string; name: string; code: string; isActive: boolean }>;
   }> = [];
@@ -171,10 +217,14 @@ export async function getUserBusinessesWithStores(userId: string): Promise<
       columns: { id: true, name: true, code: true, isActive: true },
     });
 
+    const profile = profileMap.get(membership.businessId);
+    const profileName = profile?.businessName?.trim();
+
     result.push({
       businessId: membership.businessId,
-      businessName: business.name,
+      businessName: profileName || business.name,
       businessSlug: business.slug,
+      logoUrl: profile?.logoUrl ?? null,
       role: membership.role,
       stores: userStores,
     });

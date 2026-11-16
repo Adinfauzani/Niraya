@@ -74,6 +74,7 @@ type BusinessState = {
     businessId: string
     businessName: string
     businessSlug: string
+    logoUrl: string | null
     role: string
     stores: Array<{ id: string; name: string; code: string; isActive: boolean }>
   }>
@@ -188,6 +189,7 @@ export const useBusinessStore = create<BusinessState>()((set, get) => ({
           businessId: string
           businessName: string
           businessSlug: string
+          logoUrl: string | null
           role: string
           stores: Array<{ id: string; name: string; code: string; isActive: boolean }>
         }> = data?.businesses ?? []

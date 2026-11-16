@@ -1,6 +1,6 @@
 import { db } from "@/server/db";
-import { businesses, stores, userProfiles, businessMembers, roles, permissions, rolePermissions } from "@/server/db/schema/core";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { businesses, stores, userProfiles, businessMembers, roles } from "@/server/db/schema/core";
+import { and, eq, desc } from "drizzle-orm";
 import { PaginationParams, PaginatedResult, paginate, findById, createRecord, updateRecord, deleteRecord, existsRecord } from "./base";
 
 export class BusinessRepository {
@@ -277,70 +277,11 @@ export class RoleRepository {
     return result[0] ?? null;
   }
 
-  async findWithPermissions() {
-    const rolesData = await db.select().from(roles);
-    const roleCodes = rolesData.map(r => r.code);
-    if (roleCodes.length === 0) return [];
-
-    const perms = await db
-      .select({ roleCode: rolePermissions.roleCode, permission: permissions })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(permissions.code, rolePermissions.permissionCode))
-      .where(sql`${rolePermissions.roleCode} IN (${roleCodes.join(",")})`);
-
-    const permMap = new Map<string, typeof permissions.$inferSelect[]>();
-    for (const p of perms) {
-      if (!permMap.has(p.roleCode)) permMap.set(p.roleCode, []);
-      permMap.get(p.roleCode)!.push(p.permission);
-    }
-
-    return rolesData.map(r => ({ ...r, permissions: permMap.get(r.code) ?? [] }));
-  }
-
   async create(data: typeof roles.$inferInsert) {
     return createRecord(this.table, data);
   }
 
   async update(id: string, data: Partial<typeof roles.$inferInsert>) {
-    return updateRecord(this.table, this.idColumn, id, data);
-  }
-
-  async delete(id: string) {
-    return deleteRecord(this.table, this.idColumn, id);
-  }
-
-  async exists(id: string) {
-    return existsRecord(this.table, this.idColumn, id);
-  }
-}
-
-export class PermissionRepository {
-  private table = permissions;
-  private idColumn = permissions.code;
-  private searchableColumns = [permissions.name, permissions.description];
-
-  async findById(id: string) {
-    return findById(this.table, this.idColumn, id);
-  }
-
-  async findAll(params?: PaginationParams): Promise<PaginatedResult<typeof permissions.$inferSelect>> {
-    return paginate(this.table, this.idColumn, params);
-  }
-
-  async findByName(name: string) {
-    const result = await db.select().from(permissions).where(eq(permissions.name, name)).limit(1);
-    return result[0] ?? null;
-  }
-
-  async findByModule(module: string) {
-    return db.select().from(permissions).where(eq(permissions.module, module));
-  }
-
-  async create(data: typeof permissions.$inferInsert) {
-    return createRecord(this.table, data);
-  }
-
-  async update(id: string, data: Partial<typeof permissions.$inferInsert>) {
     return updateRecord(this.table, this.idColumn, id, data);
   }
 

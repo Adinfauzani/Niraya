@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/lib/auth";
-import { ensureUserProfile, normalizeRole } from "@/server/auth/session";
+import { ensureUserProfile, normalizeRole, normalizePlan } from "@/server/auth/session";
 
 /**
  * Mengembalikan akun yang sedang login beserta role aplikasinya.
@@ -25,6 +25,7 @@ export async function GET() {
       email: profile?.email ?? sessionUser.email ?? null,
       image: (sessionUser as any).image ?? (sessionUser as any).avatarUrl ?? null,
       role: normalizeRole(profile?.role),
+      plan: normalizePlan(profile?.plan),
       createdAt: profile?.createdAt ?? null,
       updatedAt: profile?.updatedAt ?? null,
     },

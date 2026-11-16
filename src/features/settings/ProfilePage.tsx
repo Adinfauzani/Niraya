@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRightIcon, CalendarIcon, LayoutDashboardIcon, LogOutIcon, MailIcon, ReceiptTextIcon, ShieldCheckIcon, UserIcon, PhoneIcon, ImageIcon, SaveIcon, Edit2Icon, XIcon, Loader2Icon } from "lucide-react"
+import { CalendarIcon, LayoutDashboardIcon, LogOutIcon, MailIcon, ReceiptTextIcon, ShieldCheckIcon, StoreIcon, UserIcon, PhoneIcon, ImageIcon, SaveIcon, Edit2Icon, XIcon, Loader2Icon } from "lucide-react"
 
 import { useRealUser } from "@/hooks/useRealUser"
 import { appRoleLabel } from "@/lib/businessLabels"
@@ -19,7 +19,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 
 type ActivityItem = {
@@ -47,6 +46,19 @@ function statusVariant(status: string): "default" | "secondary" | "outline" | "d
 function humanStatus(value?: string | null) {
   if (!value) return "-"
   return value.replaceAll("_", " ")
+}
+
+function planLabel(plan?: string | null) {
+  switch (plan) {
+    case "starter":
+      return "Starter"
+    case "plus":
+      return "Plus"
+    case "pro":
+      return "Pro"
+    default:
+      return "Free"
+  }
 }
 
 export function ProfilePage() {
@@ -143,72 +155,89 @@ export function ProfilePage() {
           </div>
           <div className="hidden items-center gap-2 sm:flex">
             <Button asChild variant="outline" className="rounded-xl"><Link href="/plans">Plans</Link></Button>
-            {canAccessDashboard ? <Button asChild variant="outline" className="rounded-xl"><Link href="/dashboard"><LayoutDashboardIcon className="size-4" aria-hidden />Dashboard</Link></Button> : null}
+            {canAccessDashboard ? <Button asChild variant="outline" className="rounded-xl"><Link href="/dashboard"><LayoutDashboardIcon className="size-4" aria-hidden />Dashboard</Link></Button> : <Button asChild className="rounded-xl"><Link href="/dashboard/onboarding"><StoreIcon className="size-4" aria-hidden />Buka usaha</Link></Button>}
             <PublicNavigation variant="desktop" />
           </div>
         </header>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <Card className="h-fit overflow-hidden rounded-2xl border-border/70 shadow-none">
-            <CardHeader className="items-center border-b border-border/60 bg-card/50 pb-5 text-center">
-              <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted/40 text-xl font-semibold relative">
-                {isEditing ? (
-                  <>
-                    <Avatar className="h-20 w-20">
-                      <AvatarImage src={editAvatarUrl || undefined} alt="Avatar" />
-                      <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
-                        {editName ? getInitials(editName) : "?"}
-                      </AvatarFallback>
-                    </Avatar>
+            <div className="relative h-32 bg-gradient-to-br from-primary via-primary/90 to-primary/70">
+              <div className="absolute inset-0 opacity-[0.15] [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:18px_18px]" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
+              <span className="absolute right-3 top-3 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                {displayRole} · {planLabel(realUser?.plan)}
+              </span>
+            </div>
+            <div className="px-4 pb-4">
+              <div className="-mt-10 flex items-end justify-between gap-3">
+                <div className="relative">
+                  <div className="flex size-20 items-center justify-center overflow-hidden rounded-full border-4 border-card bg-muted text-xl font-semibold shadow-sm">
+                    {isEditing ? (
+                      <Avatar className="h-full w-full">
+                        <AvatarImage src={editAvatarUrl || undefined} alt="Avatar" />
+                        <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                          {editName ? getInitials(editName) : "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : realUser?.image ? (
+                      <img src={realUser.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      initials(realUser?.name || "Akun")
+                    )}
+                  </div>
+                  {isEditing ? (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute bottom-0 right-0 -translate-y-1/2 -translate-x-1/2 bg-background"
+                      className="absolute -bottom-1 -right-1 size-7 rounded-full border border-border/70 bg-background shadow-sm"
                       onClick={() => setEditAvatarUrl("")}
                       disabled={isSaving}
                     >
-                      <XIcon className="h-4 w-4 text-destructive" />
+                      <XIcon className="h-3.5 w-3.5 text-destructive" />
                       <span className="sr-only">Hapus avatar</span>
                     </Button>
-                  </>
-                ) : (
-                  realUser?.image ? <img src={realUser.image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : initials(realUser?.name || "Akun")
-                )}
+                  ) : null}
+                </div>
               </div>
-              <div className="min-w-0 pt-1">
+
+              <div className="mt-3 min-w-0">
                 {isEditing ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      placeholder="Nama lengkap"
-                      className="text-center text-lg font-semibold"
-                      disabled={isSaving}
-                    />
-                    <div className="space-y-2">
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="profile-name" className="text-xs text-muted-foreground">Nama lengkap</Label>
+                      <Input
+                        id="profile-name"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Nama lengkap"
+                        disabled={isSaving}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label htmlFor="profile-phone" className="text-xs text-muted-foreground">Telepon</Label>
                       <div className="relative">
-                        <PhoneIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <PhoneIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="profile-phone"
                           value={editPhone}
                           onChange={(e) => setEditPhone(e.target.value)}
                           placeholder="0812-3456-7890"
-                          className="pl-10 text-center text-sm"
+                          className="pl-10"
                           disabled={isSaving}
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="profile-avatar" className="text-xs text-muted-foreground">Avatar URL</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="profile-avatar" className="text-xs text-muted-foreground">URL avatar</Label>
                       <div className="relative">
-                        <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <ImageIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="profile-avatar"
                           value={editAvatarUrl}
                           onChange={(e) => setEditAvatarUrl(e.target.value)}
                           placeholder="https://example.com/avatar.png"
-                          className="pl-10 text-center text-sm"
+                          className="pl-10"
                           disabled={isSaving}
                         />
                       </div>
@@ -216,49 +245,86 @@ export function ProfilePage() {
                   </div>
                 ) : (
                   <>
-                    <CardTitle className="truncate text-lg">{realUser?.name || (loadingUser ? "Memuat..." : "Akun terdaftar")}</CardTitle>
-                    <CardDescription className="truncate">{realUser?.email || "-"}</CardDescription>
+                    <h2 className="truncate text-lg font-semibold tracking-tight">
+                      {realUser?.name || (loadingUser ? "Memuat..." : "Akun terdaftar")}
+                    </h2>
+                    <p className="truncate text-sm text-muted-foreground">{realUser?.email || "-"}</p>
                   </>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-2 p-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[11px] text-muted-foreground">Aktivitas</p><p className="mt-0.5 text-lg font-semibold tabular-nums">{activity ? summary.count : "—"}</p></div>
-                <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[11px] text-muted-foreground">Selesai/terbayar</p><p className="mt-0.5 text-lg font-semibold tabular-nums">{activity ? summary.completed : "—"}</p></div>
-              </div>
-              {canAccessDashboard ? <Button asChild variant="outline" className="w-full justify-between rounded-xl sm:hidden"><Link href="/dashboard">Buka dashboard <ArrowRightIcon className="size-4" aria-hidden /></Link></Button> : null}
-              {isEditing ? (
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setIsEditing(false)} disabled={isSaving}>
-                    <XIcon className="w-4 h-4 mr-2" />
-                    Batal
-                  </Button>
-                  <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? (
-                      <>
-                        <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : (
-                      <>
-                        <SaveIcon className="w-4 h-4 mr-2" />
-                        Simpan
-                      </>
-                    )}
-                  </Button>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+                  <p className="text-[11px] text-muted-foreground">Aktivitas</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums">{activity ? summary.count : "—"}</p>
                 </div>
-              ) : (
-                <Button variant="outline" className="w-full justify-center" onClick={() => setIsEditing(true)}>
-                  <Edit2Icon className="w-4 h-4 mr-2" />
-                  Edit Profil
+                <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+                  <p className="text-[11px] text-muted-foreground">Selesai/terbayar</p>
+                  <p className="mt-0.5 text-lg font-semibold tabular-nums">{activity ? summary.completed : "—"}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {canAccessDashboard ? (
+                  <Button asChild className="w-full rounded-xl">
+                    <Link href="/dashboard"><LayoutDashboardIcon className="size-4" aria-hidden />Buka dashboard</Link>
+                  </Button>
+                ) : (
+                  <Button asChild className="w-full rounded-xl">
+                    <Link href="/dashboard/onboarding"><StoreIcon className="size-4" aria-hidden />Buka usaha sekarang</Link>
+                  </Button>
+                )}
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                      <XIcon className="mr-2 h-4 w-4" />
+                      Batal
+                    </Button>
+                    <Button className="flex-1 rounded-xl" onClick={handleSave} disabled={isSaving}>
+                      {isSaving ? (
+                        <>
+                          <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                          Menyimpan...
+                        </>
+                      ) : (
+                        <>
+                          <SaveIcon className="mr-2 h-4 w-4" />
+                          Simpan
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" className="w-full justify-center rounded-xl" onClick={() => setIsEditing(true)}>
+                    <Edit2Icon className="mr-2 h-4 w-4" />
+                    Edit profil
+                  </Button>
+                )}
+                <Button variant="ghost" className="w-full justify-start rounded-xl text-muted-foreground hover:text-destructive" onClick={handleSignOut} disabled={isEditing}>
+                  <LogOutIcon className="size-4" aria-hidden />
+                  Keluar
                 </Button>
-              )}
-              <Button variant="ghost" className="w-full justify-start rounded-xl text-muted-foreground hover:text-destructive" onClick={handleSignOut} disabled={isEditing}><LogOutIcon className="size-4" aria-hidden />Keluar</Button>
-            </CardContent>
+              </div>
+            </div>
           </Card>
 
           <div className="space-y-4">
+            {!canAccessDashboard ? (
+              <Card className="rounded-2xl border-primary/20 bg-primary/5 shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Belum punya usaha?</CardTitle>
+                  <CardDescription>Buat workspace bisnis untuk mulai memakai Niraya POS.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild className="w-full rounded-xl">
+                    <Link href="/dashboard/onboarding">
+                      <StoreIcon className="size-4" aria-hidden />
+                      Buka usaha sekarang
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card className="rounded-2xl border-border/70 shadow-none">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
@@ -273,6 +339,7 @@ export function ProfilePage() {
                   { icon: MailIcon, label: "Email", value: realUser?.email || "-" },
                   { icon: PhoneIcon, label: "Telepon", value: isEditing ? editPhone : (realUser?.phone || "-") },
                   { icon: ShieldCheckIcon, label: "Peran", value: displayRole },
+                  { icon: StoreIcon, label: "Paket", value: planLabel(realUser?.plan) },
                   { icon: CalendarIcon, label: "Terdaftar", value: realUser?.createdAt ? formatDate(realUser.createdAt) : "Aktif" },
                 ].map((item) => {
                   const Icon = item.icon

@@ -34,27 +34,6 @@ ON CONFLICT ("Code") DO UPDATE SET
     "IsSystem" = EXCLUDED."IsSystem",
     "UpdatedAt" = now();
 
--- Permissions: granular permissions for RBAC
-CREATE TABLE "core"."Permissions" (
-    "Code" text PRIMARY KEY NOT NULL,
-    "Name" text NOT NULL,
-    "Description" text,
-    "Module" text NOT NULL,
-    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT "Permissions_Name_key" UNIQUE ("Name")
-);
-CREATE INDEX "Permissions_Module_idx" ON "core"."Permissions" ("Module");
-
--- RolePermissions: many-to-many mapping of roles to permissions
-CREATE TABLE "core"."RolePermissions" (
-    "RoleCode" text NOT NULL REFERENCES "core"."Roles"("Code") ON DELETE CASCADE,
-    "PermissionCode" text NOT NULL REFERENCES "core"."Permissions"("Code") ON DELETE CASCADE,
-    "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    PRIMARY KEY ("RoleCode", "PermissionCode")
-);
-CREATE INDEX "RolePermissions_RoleCode_idx" ON "core"."RolePermissions" ("RoleCode");
-CREATE INDEX "RolePermissions_PermissionCode_idx" ON "core"."RolePermissions" ("PermissionCode");
-
 -- Businesses: business entities (single or multi-business)
 CREATE TABLE "core"."Businesses" (
     "Id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -104,11 +83,14 @@ CREATE TABLE "core"."UserProfiles" (
     "Phone" text,
     "AvatarUrl" text,
     "Role" text NOT NULL DEFAULT 'user' REFERENCES "core"."Roles"("Code") ON DELETE RESTRICT,
+    "Plan" text NOT NULL DEFAULT 'free',
     "CreatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "UpdatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "DeletedAt" timestamp with time zone
+    "DeletedAt" timestamp with time zone,
+    CONSTRAINT "UserProfiles_Plan_check" CHECK ("Plan" IN ('free', 'starter', 'plus', 'pro'))
 );
 CREATE INDEX "UserProfiles_Role_idx" ON "core"."UserProfiles" ("Role");
+CREATE INDEX "UserProfiles_Plan_idx" ON "core"."UserProfiles" ("Plan");
 CREATE INDEX "UserProfiles_Email_idx" ON "core"."UserProfiles" ("Email");
 CREATE INDEX "UserProfiles_Phone_idx" ON "core"."UserProfiles" ("Phone");
 

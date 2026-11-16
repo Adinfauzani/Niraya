@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/server/auth/config";
 
 import { getUserTenantContext, TenantValidationError } from "@/lib/tenant";
-import { getCurrentUserRole } from "@/server/auth/session";
+import { readUserRole } from "@/server/auth/session";
+import { getMaintenanceConfig, resolveEstimatedEndAt } from "@/server/maintenance";
 
 const MAINTENANCE_BYPASS_PATHS = [
   "/api/maintenance",
@@ -20,17 +21,82 @@ const MAINTENANCE_BYPASS_PATHS = [
   "/verify",
 ];
 
-async function checkMaintenanceMode(request: NextRequest): Promise<{ enabled: boolean; estimatedEndAt: string | null }> {
+const MAINTENANCE_CACHE_TTL_MS = 15_000;
+let maintenanceCache: {
+  enabled: boolean;
+  estimatedEndAt: string | null;
+  expiresAt: number;
+} | null = null;
+
+/**
+ * Cache the resolved auth context (user + tenant) per session token.
+ *
+ * The proxy previously ran 5-6 DB round-trips on EVERY request (session lookup,
+ * tenant membership, business, store). On a high-latency link to Supabase that
+ * was 2-3s per request and made the whole app feel stuck. The context changes
+ * rarely, so a short TTL cache removes almost all of that cost. Tenant changes
+ * take effect within the TTL; logout clears the cookie, so a stale entry
+ * becomes unreachable. The role is resolved lazily only for `/dashboard`.
+ */
+type CachedAuthContext = {
+  userId: string;
+  businessId: string | null;
+  storeId: string | null;
+  expiresAt: number;
+};
+
+const AUTH_CONTEXT_CACHE_TTL_MS = 30_000;
+const AUTH_CONTEXT_CACHE_MAX_ENTRIES = 2000;
+const authContextCache = new Map<string, CachedAuthContext>();
+
+function readCachedAuth(token: string | undefined): CachedAuthContext | null {
+  if (!token) return null;
+  const entry = authContextCache.get(token);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    authContextCache.delete(token);
+    return null;
+  }
+  return entry;
+}
+
+function writeCachedAuth(
+  token: string | undefined,
+  value: Omit<CachedAuthContext, "expiresAt">
+) {
+  if (!token) return;
+  if (authContextCache.size >= AUTH_CONTEXT_CACHE_MAX_ENTRIES) {
+    const oldest = authContextCache.keys().next().value;
+    if (oldest) authContextCache.delete(oldest);
+  }
+  authContextCache.set(token, {
+    ...value,
+    expiresAt: Date.now() + AUTH_CONTEXT_CACHE_TTL_MS,
+  });
+}
+
+async function checkMaintenanceMode(): Promise<{ enabled: boolean; estimatedEndAt: string | null }> {
+  // Cache the maintenance flag briefly so every request does not trigger an
+  // extra DB query. The write path still blocks on a stale cache for at most
+  // the TTL. The query runs in-process instead of a self-fetch HTTP request,
+  // which previously added a full extra round-trip (and a second proxy pass)
+  // on every cache miss.
+  const now = Date.now();
+  if (maintenanceCache && maintenanceCache.expiresAt > now) {
+    return {
+      enabled: maintenanceCache.enabled,
+      estimatedEndAt: maintenanceCache.estimatedEndAt,
+    };
+  }
+
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const res = await fetch(`${baseUrl}/api/maintenance/status`, {
-      cache: "no-store",
-      headers: { "x-maintenance-check": "true" },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { enabled: data.enabled === true, estimatedEndAt: data.estimatedEndAt ?? null };
-    }
+    const config = await getMaintenanceConfig();
+    const result = {
+      enabled: config.enabled === true,
+      estimatedEndAt: resolveEstimatedEndAt(config)?.toISOString() ?? null,
+    };
+    maintenanceCache = { ...result, expiresAt: now + MAINTENANCE_CACHE_TTL_MS };
+    return result;
   } catch {
     // If check fails, assume no maintenance to avoid blocking
   }
@@ -66,7 +132,29 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const user = await getAuthenticatedUser(request);
+  const token = request.cookies.get("better-auth.session_token")?.value;
+  const cached = readCachedAuth(token);
+
+  let user: { id: string } | null = null;
+  let tenant: { businessId: string; storeId: string } | null = null;
+
+  if (cached) {
+    user = { id: cached.userId };
+    tenant = cached.businessId
+      ? { businessId: cached.businessId, storeId: cached.storeId ?? "" }
+      : null;
+  } else {
+    const sessionUser = await getAuthenticatedUser(request);
+    user = sessionUser ? { id: sessionUser.id } : null;
+    if (sessionUser?.id) {
+      tenant = await validateTenant(request, sessionUser.id);
+      writeCachedAuth(token, {
+        userId: sessionUser.id,
+        businessId: tenant?.businessId ?? null,
+        storeId: tenant?.storeId ?? null,
+      });
+    }
+  }
 
   // Check maintenance mode for protected routes
   const isMaintenanceBypass = MAINTENANCE_BYPASS_PATHS.some((path) =>
@@ -76,7 +164,7 @@ export async function updateSession(request: NextRequest) {
   let maintenanceInfo = { enabled: false, estimatedEndAt: null as string | null };
 
   if (!isMaintenanceBypass) {
-    maintenanceInfo = await checkMaintenanceMode(request);
+    maintenanceInfo = await checkMaintenanceMode();
     if (maintenanceInfo.enabled) {
       // Block API mutations
       if (request.nextUrl.pathname.startsWith("/api/") &&
@@ -94,9 +182,31 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // Halaman dashboard (di dalam route group `(dashboard)`) yang hanya boleh
+  // diakses oleh role operasional (bukan `user`). Semua path ini diperlakukan
+  // sama seperti `/dashboard` untuk redirect login & role.
+  const dashboardPagePaths = [
+    "/dashboard",
+    "/products",
+    "/inventory",
+    "/categories",
+    "/customers",
+    "/orders",
+    "/transactions",
+    "/reports",
+    "/pos",
+    "/staff",
+    "/settings",
+    "/help",
+  ];
+
+  const matchesPrefix = (pathname: string, prefix: string) =>
+    pathname === prefix || pathname.startsWith(prefix + "/");
+
   // Protected routes - redirect to login if no user
   const protectedPaths = [
-    "/dashboard",
+    ...dashboardPagePaths,
+    "/onboarding",
     "/api/business",
     "/api/pos",
     "/api/staff",
@@ -104,7 +214,7 @@ export async function updateSession(request: NextRequest) {
   ];
 
   const isProtected = protectedPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
+    matchesPrefix(request.nextUrl.pathname, path)
   );
 
   if (isProtected && !user) {
@@ -114,12 +224,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Add tenant context headers for downstream use
-  if (user?.id) {
-    const tenant = await validateTenant(request, user.id);
-    if (tenant) {
-      response.headers.set("x-tenant-business-id", tenant.businessId);
-      response.headers.set("x-tenant-store-id", tenant.storeId);
-    }
+  if (tenant) {
+    response.headers.set("x-tenant-business-id", tenant.businessId);
+    response.headers.set("x-tenant-store-id", tenant.storeId);
   }
 
   // Root path - redirect authenticated users to dashboard
@@ -130,26 +237,31 @@ export async function updateSession(request: NextRequest) {
   // Auth routes - redirect to dashboard if already logged in
   const authPaths = ["/login", "/signup", "/register", "/forgot-password", "/reset-password", "/auth/callback"];
   const isAuthPage = authPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
+    matchesPrefix(request.nextUrl.pathname, path)
   );
 
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Role `user` (akun dasar tanpa bisnis) tidak boleh masuk dashboard —
-  // arahkan ke halaman profil, kecuali saat masih dalam alur onboarding
-  // (`/dashboard/onboarding`). Dilakukan di proxy (server) agar konsisten
-  // dengan `(dashboard)/layout.tsx` yang mengharapkan halaman profil untuk
-  // role dasar. Melewati `/api/me`, `/api/onboarding`, dan `/api/business`
-  // agar tidak loop.
-  if (user?.id && request.nextUrl.pathname.startsWith("/dashboard")) {
-    const role = await getCurrentUserRole();
+  // Role `user` (akun dasar tanpa bisnis) tidak boleh masuk halaman dashboard —
+  // arahkan ke halaman profil, kecuali saat masih dalam alur onboarding.
+  if (user?.id) {
+    const isDashboardPage = dashboardPagePaths.some((path) =>
+      matchesPrefix(request.nextUrl.pathname, path)
+    );
     const isOnboardingFlow =
-      request.nextUrl.pathname === "/dashboard/onboarding" ||
-      request.nextUrl.pathname.startsWith("/dashboard/onboarding/");
-    if (role === "user" && !isOnboardingFlow && !request.nextUrl.pathname.startsWith("/api/")) {
-      return NextResponse.redirect(new URL("/profile", request.url));
+      matchesPrefix(request.nextUrl.pathname, "/onboarding") ||
+      matchesPrefix(request.nextUrl.pathname, "/dashboard/onboarding");
+    if (
+      isDashboardPage &&
+      !isOnboardingFlow &&
+      !request.nextUrl.pathname.startsWith("/api/")
+    ) {
+      const role = await readUserRole(user.id);
+      if (role === "user") {
+        return NextResponse.redirect(new URL("/profile", request.url));
+      }
     }
   }
 

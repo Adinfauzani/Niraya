@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { userProfiles, roles } from "@/server/db/schema";
+import { userProfiles, roles, USER_PLANS, type UserPlan } from "@/server/db/schema";
 import { getSession } from "@/lib/auth";
 
 /**
@@ -32,6 +32,32 @@ export function normalizeRole(value: unknown): UserRole {
     : DEFAULT_ROLE;
 }
 
+/** Plan bawaan untuk akun baru / belum punya langganan. */
+export const DEFAULT_PLAN: UserPlan = "free";
+
+const PLAN_VALUES = USER_PLANS as readonly string[];
+
+/** Pastikan nilai plan dari database valid; jika tidak, pakai plan default. */
+export function normalizePlan(value: unknown): UserPlan {
+  return typeof value === "string" && PLAN_VALUES.includes(value)
+    ? (value as UserPlan)
+    : DEFAULT_PLAN;
+}
+
+/** Ambil plan pengguna dari `core.UserProfiles`. */
+export async function getPlanForUser(userId: string): Promise<UserPlan> {
+  try {
+    const [row] = await db
+      .select({ plan: userProfiles.plan })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, userId))
+      .limit(1);
+    return normalizePlan(row?.plan);
+  } catch {
+    return DEFAULT_PLAN;
+  }
+}
+
 /**
  * Cek apakah role pengguna memenuhi role yang dibutuhkan (atau lebih tinggi).
  */
@@ -40,7 +66,7 @@ export function hasRole(userRole: UserRole | undefined, required: UserRole) {
   return ROLE_RANK[userRole] >= ROLE_RANK[required];
 }
 
-type SessionUser = {
+export type SessionUser = {
   id?: string;
   name?: string | null;
   email?: string | null;
@@ -64,30 +90,42 @@ export async function ensureUserProfile(user: SessionUser | null) {
 
   if (existing) return existing;
 
-  // Pastikan role 'user' ada di tabel Roles untuk memenuhi foreign key
-  await db
-    .insert(roles)
-    .values({
-      code: "user",
-      name: "User",
-      description: "Akun dasar",
-      rank: 0,
-      isSystem: true,
-    })
-    .onConflictDoNothing();
+  try {
+    // Pastikan role 'user' ada di tabel Roles untuk memenuhi foreign key
+    await db
+      .insert(roles)
+      .values({
+        code: "user",
+        name: "User",
+        description: "Akun dasar",
+        rank: 0,
+        isSystem: true,
+      })
+      .onConflictDoNothing();
 
-  const [created] = await db
-    .insert(userProfiles)
-    .values({
-      id: supabaseUserId,
-      name: user.name ?? null,
-      email: user.email ?? null,
-      role: DEFAULT_ROLE,
-    })
-    .onConflictDoNothing()
-    .returning();
+    const [created] = await db
+      .insert(userProfiles)
+      .values({
+        id: supabaseUserId,
+        name: user.name ?? null,
+        email: user.email ?? null,
+        role: DEFAULT_ROLE,
+        plan: DEFAULT_PLAN,
+      })
+      .onConflictDoNothing()
+      .returning();
 
-  if (created) return created;
+    if (created) return created;
+  } catch (error) {
+    // Legacy DBs have an FK `UserProfiles_Id_fkey` -> `core."users"` that does
+    // not contain Better Auth users. In that case the profile cannot be created
+    // here; fall through to the lookup below so callers get `null`
+    // (=> DEFAULT_ROLE) instead of a 500.
+    const code =
+      (error as { code?: string })?.code ??
+      (error as { cause?: { code?: string } })?.cause?.code;
+    if (code !== "23503") throw error;
+  }
 
   // Bisa terjadi race saat dua request pertama datang bersamaan.
   const [fallback] = await db
@@ -116,7 +154,34 @@ export async function getCurrentUserRole(): Promise<UserRole> {
 
   if (!user?.id) return DEFAULT_ROLE;
 
+  return getRoleForUser(user);
+}
+
+/**
+ * Ambil role untuk user yang sesinya sudah diambil pemanggil.
+ *
+ * Sebelumnya `getCurrentUserRole()` memanggil `getSession()` lagi, sehingga
+ * proxy (middleware) menembakkan 2 pencarian sesi per request. Dengan helper
+ * ini pemanggil yang sudah punya `user` (mis. `getAuthenticatedUser`) hanya
+ * perlu 1 query profil, bukan 2-3 round-trip sesi tambahan.
+ */
+export async function getRoleForUser(user: SessionUser): Promise<UserRole> {
   const profile = await ensureUserProfile(user);
+  return normalizeRole(profile?.role);
+}
+
+/**
+ * Baca role user tanpa membuat profil (read-only).
+ *
+ * Dipakai proxy/middleware yang hanya perlu menentukan redirect dan tidak boleh
+ * menulis ke DB. Jika profil belum ada, kembalikan DEFAULT_ROLE.
+ */
+export async function readUserRole(userId: string): Promise<UserRole> {
+  const [profile] = await db
+    .select({ role: userProfiles.role })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, userId))
+    .limit(1);
   return normalizeRole(profile?.role);
 }
 
@@ -169,6 +234,8 @@ export const ACTION_ROLES: Record<string, UserRole> = {
   "qr.order.manage": "cashier",
   // Transaksi
   "transaction.void": "manager",
+  // Pesanan (storefront/QR)
+  "order.status": "cashier",
   // Pengaturan
   "settings.update": "admin",
 };

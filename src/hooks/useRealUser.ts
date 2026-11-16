@@ -7,6 +7,7 @@ type RealUser = {
   name?: string
   email?: string
   role?: string
+  plan?: string
   image?: string | null
 } | null
 
@@ -29,8 +30,7 @@ export function useRealUser(enabled: boolean) {
         const { data }: any = await (authClient as any).getSession()
         if (!active) return
 
-        const session = data?.session ?? null
-        const sessionUser: SessionUser | null = session?.user ?? null
+        const sessionUser: SessionUser | null = data?.user ?? null
 
         if (!sessionUser) {
           setUser(null)

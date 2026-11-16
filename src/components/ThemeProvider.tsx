@@ -10,6 +10,9 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
+import { usePathname } from 'next/navigation'
+
+import { isLightOnlyPath } from '@/lib/theme'
 
 export type Theme = 'light' | 'dark' | 'system'
 type ResolvedTheme = 'light' | 'dark'
@@ -55,20 +58,25 @@ function applyResolvedTheme(resolved: ResolvedTheme) {
 }
 
 /**
- * Small theme provider for the Vite app. The inline script in `index.html`
- * applies the stored preference before paint; this keeps React state in sync
- * and reacts to OS theme changes when the user picks "System".
+ * Small theme provider for the Next.js app. The inline script in the root
+ * layout applies the stored preference before paint; this keeps React state in
+ * sync and reacts to OS theme changes when the user picks "System".
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(readStoredTheme)
+  const pathname = usePathname()
+  const forceLight = isLightOnlyPath(pathname)
   const prefersDark = useSyncExternalStore(
     subscribeToSystemTheme,
     getSystemThemeSnapshot,
     getServerThemeSnapshot,
   )
 
-  const resolvedTheme: ResolvedTheme =
-    theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme
+  const resolvedTheme: ResolvedTheme = forceLight
+    ? 'light'
+    : theme === 'system'
+      ? (prefersDark ? 'dark' : 'light')
+      : theme
 
   useEffect(() => {
     applyResolvedTheme(resolvedTheme)

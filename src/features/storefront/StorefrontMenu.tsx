@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRightIcon,
@@ -11,7 +11,6 @@ import {
   FunnelPlusIcon,
   FunnelXIcon,
   ImageOffIcon,
-  Loader2Icon,
   MinusIcon,
   PackageIcon,
   PlusIcon,
@@ -24,11 +23,18 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { getJson, postJson } from "@/features/storefront/api";
+import { getJson } from "@/features/storefront/api";
+import {
+  MAX_QTY,
+  cartKey,
+  cartStorageKey as getCartStorageKey,
+  loadCart,
+  saveCart,
+  type CartLine,
+} from "@/features/storefront/cart";
 import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { useIsMobile } from "@/hooks/useMobile";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -50,32 +56,17 @@ type Product = {
   sellingPrice: number; imageUrl?: string | null; isTaxable: boolean; available: boolean; maxQuantity?: number | null; variants: Variant[];
 };
 type Category = { id: string; name: string; sortOrder: number };
-type CartLine = {
-  key: string; productId: string; variantId?: string | null; name: string; variantName?: string | null;
-  quantity: number; unitPrice: number; notes?: string;
-};
 type CatalogResp = {
   ok: true;
   catalog: {
-    business: { name: string; description?: string | null; logoUrl?: string | null; city?: string | null };
+    business: { name: string; description?: string | null; logoUrl?: string | null; city?: string | null; storeCount?: number };
+    store?: { id: string; name: string; address?: string | null } | null;
     payment: { storefrontCheckoutEnabled: boolean; manualTransferEnabled: boolean; methods: { id: string; label: string }[] };
     categories: Category[]; products: Product[];
   };
   context: { mode: "direct" };
 };
 
-const CART_KEY = "niraya_storefront_cart";
-const IDEM_KEY = "niraya_storefront_idem";
-const MAX_QTY = 99;
-
-function cartKey(p: Product, variantId?: string | null, notes?: string) {
-  return `${p.id}:${variantId || ""}:${(notes || "").trim().toLowerCase()}`;
-}
-function idemKey() {
-  let v = sessionStorage.getItem(IDEM_KEY);
-  if (!v) { v = crypto.randomUUID(); sessionStorage.setItem(IDEM_KEY, v); }
-  return v;
-}
 function unitPrice(p: Product, variantId?: string | null) {
   return Number(p.variants.find((v) => v.id === variantId)?.sellingPrice ?? p.sellingPrice);
 }
@@ -209,15 +200,20 @@ function StorefrontProductCard({
   );
 }
 
-function MenuDesktopTopBar({ biz }: { biz: { name: string; logoUrl?: string | null } | null }) {
+function MenuDesktopTopBar({ biz, storeName }: { biz: { name: string; logoUrl?: string | null; storeCount?: number } | null; storeName?: string | null }) {
+  const bizName = biz?.name || "Menu";
+  const sameName = !!storeName && storeName.toLowerCase() === bizName.toLowerCase();
+  const showStoreName = !!storeName && !sameName && (biz?.storeCount ?? 1) > 1;
+  const title = showStoreName ? storeName! : bizName;
   return (
     <div className="hidden lg:fixed lg:inset-x-0 lg:top-0 lg:z-40 lg:block lg:border-b lg:border-border/60 lg:bg-background/95 lg:backdrop-blur supports-[backdrop-filter]:lg:bg-background/85">
       <div className="mx-auto flex h-[57px] max-w-6xl items-center justify-between gap-3 px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           <Link href="/" className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/20 outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Kembali ke beranda">
-            {biz?.logoUrl ? <img src={biz.logoUrl} alt="" className="size-full object-cover" /> : <span className="text-[11px] font-semibold">{(biz?.name || "N").slice(0, 1).toUpperCase()}</span>}
+            {biz?.logoUrl ? <img src={biz.logoUrl} alt="" className="size-full object-cover" /> : <span className="text-[11px] font-semibold">{bizName.slice(0, 1).toUpperCase()}</span>}
           </Link>
-          <span className="min-w-0 truncate text-sm font-medium tracking-tight">{biz?.name || "Menu"}</span>
+          <span className="min-w-0 truncate text-sm font-medium tracking-tight">{title}</span>
+          {showStoreName ? <span className="min-w-0 truncate text-xs text-muted-foreground">· {bizName}</span> : null}
         </div>
         <PublicNavigation variant="desktop" />
       </div>
@@ -225,8 +221,14 @@ function MenuDesktopTopBar({ biz }: { biz: { name: string; logoUrl?: string | nu
   );
 }
 
-export function StorefrontMenu() {
+export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | null } = {}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const storeId = storeIdProp ?? searchParams.get("store") ?? null;
+  const cartStorageKey = getCartStorageKey(storeId);
+  const checkoutHref = storeId
+    ? `/menu/checkout?store=${encodeURIComponent(storeId)}`
+    : "/menu/checkout";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CatalogResp | null>(null);
@@ -239,26 +241,26 @@ export function StorefrontMenu() {
   const [dVariant, setDVariant] = useState<string | null>(null);
   const [dQty, setDQty] = useState(1);
   const [dNotes, setDNotes] = useState("");
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
   const prevCount = useRef(0);
 
   useEffect(() => {
     let on = true;
-    getJson<CatalogResp>("/api/public/storefront/catalog")
+    setLoading(true);
+    setError(null);
+    const url = storeId
+      ? `/api/public/storefront/catalog?store=${encodeURIComponent(storeId)}`
+      : "/api/public/storefront/catalog";
+    getJson<CatalogResp>(url)
       .then((r) => { if (on) setData(r); })
       .catch((e: any) => { if (on) setError(e?.message || "Gagal memuat katalog."); })
       .finally(() => { if (on) setLoading(false); });
     return () => { on = false; };
-  }, []);
+  }, [storeId]);
   useEffect(() => {
-    try { setCart(JSON.parse(sessionStorage.getItem(CART_KEY) || "[]")); } catch { setCart([]); }
-  }, []);
-  useEffect(() => { try { sessionStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch {} }, [cart]);
+    setCart(loadCart(cartStorageKey));
+  }, [cartStorageKey]);
+  useEffect(() => { saveCart(cartStorageKey, cart); }, [cart, cartStorageKey]);
   useEffect(() => {
     if (!data?.catalog.products?.length || !cart.length) return;
     const byId = new Map(data.catalog.products.map((p) => [p.id, p]));
@@ -303,7 +305,7 @@ export function StorefrontMenu() {
     const v = p.variants.find((x) => x.id === variantId);
     const unit = Number(v?.sellingPrice ?? p.sellingPrice);
     const clean = (itemNotes || "").trim() || undefined;
-    const k = cartKey(p, variantId, clean);
+    const k = cartKey(p.id, variantId, clean);
     let added = 0, capped = false;
     setCart((prev) => {
       const current = prev.filter((l) => l.productId === p.id).reduce((s, l) => s + l.quantity, 0);
@@ -340,26 +342,13 @@ export function StorefrontMenu() {
 
   const canCheckout = !!data?.catalog.payment.storefrontCheckoutEnabled;
   const biz = data?.catalog.business;
+  const storeName = data?.catalog.store?.name?.trim() || null;
+  const bizName = biz?.name || "Menu";
+  const sameName = !!storeName && storeName.toLowerCase() === bizName.toLowerCase();
+  const showStoreName = !!storeName && !sameName && (biz?.storeCount ?? 1) > 1;
+  const menuTitle = showStoreName ? storeName! : bizName;
+  const menuSubtitle = showStoreName ? bizName : null;
   const resetFilters = () => { setSearch(""); setCategoryId("all"); setShowAvailableOnly(false); };
-
-  async function submitCheckout(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canCheckout) { toast.error("Pemesanan belum diaktifkan."); return; }
-    if (!name.trim() || !phone.trim()) { toast.error("Nama dan nomor HP/WhatsApp wajib diisi."); return; }
-    if (!cart.length) { toast.error("Keranjang kosong."); return; }
-    setSubmitting(true);
-    try {
-      const res = await postJson<any>("/api/public/storefront/checkout", {
-        idempotencyKey: idemKey(),
-        items: cart.map((l) => ({ productId: l.productId, variantId: l.variantId || undefined, quantity: l.quantity, notes: l.notes || undefined })),
-        paymentMethod: "manual_transfer", orderType: "takeaway", notes: notes || undefined, guest: { name: name.trim(), phone: phone.trim() },
-      });
-      sessionStorage.removeItem(CART_KEY); sessionStorage.removeItem(IDEM_KEY);
-      toast.success("Pesanan dibuat", { description: "Lanjut ke pembayaran." });
-      router.replace(`/menu/order/${encodeURIComponent(res.orderId)}/payment?paymentId=${encodeURIComponent(res.paymentId || "")}`);
-    } catch (err: any) { toast.error("Checkout gagal", { description: err?.message || "Silakan coba lagi." }); }
-    finally { setSubmitting(false); }
-  }
 
   if (loading) {
     return (
@@ -389,7 +378,7 @@ export function StorefrontMenu() {
   const detailPrice = detail ? unitPrice(detail, dVariant) : 0;
   return (
     <>
-      <MenuDesktopTopBar biz={biz} />
+      <MenuDesktopTopBar biz={biz} storeName={storeName} />
       <div className="min-h-svh bg-background pb-[calc(env(safe-area-inset-bottom)+11.5rem)] lg:pb-10">
         <header className="sticky top-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:top-[57px]">
           <div className="mx-auto max-w-6xl px-3 pt-[max(0.5rem,env(safe-area-inset-top))] min-[400px]:px-4 sm:px-6 lg:pt-2.5">
@@ -398,8 +387,8 @@ export function StorefrontMenu() {
                 {biz.logoUrl ? <img src={biz.logoUrl} alt={biz.name} className="size-full object-cover" /> : <span className="text-sm font-medium">{biz.name.slice(0, 1).toUpperCase()}</span>}
               </Link>
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-[15px] font-semibold tracking-tight">{biz.name}</h1>
-                <p className="truncate text-[12px] text-muted-foreground">Menu</p>
+                <h1 className="truncate text-[15px] font-semibold tracking-tight">{menuTitle}</h1>
+                {menuSubtitle ? <p className="truncate text-[12px] text-muted-foreground">{menuSubtitle}</p> : null}
               </div>
             </div>
             <div className="flex items-center gap-2 pb-2.5">
@@ -504,7 +493,7 @@ export function StorefrontMenu() {
                 <span className="block truncate text-[12px] tabular-nums text-muted-foreground">{formatCurrency(subtotal)} estimasi</span>
               </span>
             </button>
-            <Button className="h-11 shrink-0 rounded-2xl px-4 shadow-none" onClick={() => setCheckoutOpen(true)} disabled={!canCheckout}>
+            <Button className="h-11 shrink-0 rounded-2xl bg-blue-600 px-4 text-white shadow-none hover:bg-blue-500" onClick={() => router.push(checkoutHref)} disabled={!canCheckout}>
               Checkout <ArrowRightIcon className="size-4" aria-hidden />
             </Button>
           </div>
@@ -564,7 +553,7 @@ export function StorefrontMenu() {
               <p className="max-w-[12rem] text-right text-[11px] leading-4 text-muted-foreground">Pajak & total final dihitung server.</p>
             </div>
             {!canCheckout ? <p className="text-xs text-muted-foreground">Pemesanan belum diaktifkan.</p> : null}
-            <Button className="h-11 w-full rounded-2xl shadow-none" disabled={!canCheckout} onClick={() => { setCartOpen(false); setCheckoutOpen(true); }}>
+            <Button className="h-11 w-full rounded-2xl bg-blue-600 text-white shadow-none hover:bg-blue-500" disabled={!canCheckout} onClick={() => { setCartOpen(false); router.push(checkoutHref); }}>
               Lanjut ke checkout <ChevronRightIcon className="size-4" aria-hidden />
             </Button>
           </div>
@@ -603,35 +592,6 @@ export function StorefrontMenu() {
             })}
           </div>
         )}
-      </ResponsivePanel>
-
-      <ResponsivePanel open={checkoutOpen} onOpenChange={setCheckoutOpen} title="Checkout" description="Lengkapi data pemesan. Transfer manual, diverifikasi server.">
-        <form onSubmit={submitCheckout} className="space-y-4">
-          <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
-            <p className="text-sm font-medium">Ringkasan</p>
-            <div className="mt-3 space-y-2 text-sm">
-              {cart.map((l) => (
-                <div key={l.key} className="flex items-start justify-between gap-3">
-                  <span className="min-w-0 text-muted-foreground"><span className="font-medium text-foreground">{l.quantity}×</span> {l.name}{l.variantName ? ` · ${l.variantName}` : ""}</span>
-                  <span className="shrink-0 font-medium tabular-nums">{formatCurrency(l.unitPrice * l.quantity)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3 text-sm">
-              <span className="font-medium">Subtotal estimasi</span>
-              <span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">Pajak dan total akhir dihitung server.</p>
-          </div>
-          <div className="space-y-3">
-            <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="co-name">Nama penerima</label><Input id="co-name" value={name} onChange={(e) => setName(e.target.value)} className="h-11 rounded-2xl border-border/70 bg-muted/10 shadow-none" required autoComplete="name" maxLength={80} placeholder="Nama Anda" /></div>
-            <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="co-phone">No. HP / WhatsApp</label><Input id="co-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-11 rounded-2xl border-border/70 bg-muted/10 shadow-none" required inputMode="tel" autoComplete="tel" maxLength={30} placeholder="08xxxxxxxxxx" /></div>
-            <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="co-notes">Catatan pesanan <span className="font-normal text-muted-foreground">(opsional)</span></label><Textarea id="co-notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-24 rounded-2xl border-border/70 bg-muted/10 shadow-none" maxLength={500} placeholder="Contoh: tanpa sambal, ambil pukul 12.00" /></div>
-          </div>
-          <Button type="submit" className="h-11 w-full rounded-2xl shadow-none" disabled={submitting || !canCheckout || !cart.length}>
-            {submitting ? <><Loader2Icon aria-hidden="true" className="size-4 animate-spin" />Memproses...</> : "Buat pesanan & lanjut bayar"}
-          </Button>
-        </form>
       </ResponsivePanel>
       </div>
     </>

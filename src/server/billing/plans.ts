@@ -59,6 +59,27 @@ export function toResolvedPlan(row: typeof plans.$inferSelect): ResolvedPlan {
   };
 }
 
+/** Cocokkan kandidat (product_id / permalink) ke definisi katalog. */
+export function findPlanDefinition(
+  candidates: readonly (string | null | undefined)[]
+): PlanDefinition | null {
+  const normalized = candidates
+    .map((candidate) => candidate?.trim())
+    .filter((candidate): candidate is string => Boolean(candidate));
+
+  if (normalized.length === 0) return null;
+
+  return (
+    PLAN_CATALOG.find((plan) =>
+      normalized.some(
+        (candidate) =>
+          plan.gumroadProductId === candidate ||
+          plan.gumroadPermalink === candidate
+      )
+    ) ?? null
+  );
+}
+
 /** Buat/update baris `platform.Plans` dari definisi kode. */
 export async function ensurePlanRow(plan: PlanDefinition) {
   const now = new Date();
@@ -113,24 +134,33 @@ export async function ensurePlanRow(plan: PlanDefinition) {
 /**
  * Cari paket berdasarkan `product_id` Gumroad.
  *
+ * Gumroad mengirim `product_id` (base64) dan `product_permalink` (slug), dan
+ * `.env` `GUMROAD_PRODUCT_*` bisa berisi salah satunya. Keduanya dicocokkan
+ * terhadap `GumroadProductId` maupun `gumroadPermalink`.
+ *
  * Urutan: baris DB (bisa diubah manual) -> katalog kode -> simpan ke DB.
  */
 export async function resolvePlanForProduct(
-  productId: string | null | undefined
+  productId: string | null | undefined,
+  permalink?: string | null
 ): Promise<ResolvedPlan | null> {
-  if (!productId) return null;
-
-  const [existing] = await db
-    .select()
-    .from(plans)
-    .where(eq(plans.gumroadProductId, productId))
-    .limit(1);
-
-  if (existing) return toResolvedPlan(existing);
-
-  const definition = PLAN_CATALOG.find(
-    (plan) => plan.gumroadProductId === productId
+  const candidates = [productId?.trim(), permalink?.trim()].filter(
+    (value): value is string => Boolean(value)
   );
+
+  if (candidates.length === 0) return null;
+
+  for (const candidate of candidates) {
+    const [existing] = await db
+      .select()
+      .from(plans)
+      .where(eq(plans.gumroadProductId, candidate))
+      .limit(1);
+
+    if (existing) return toResolvedPlan(existing);
+  }
+
+  const definition = findPlanDefinition(candidates);
   if (!definition) return null;
 
   const row = await ensurePlanRow(definition);

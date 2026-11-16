@@ -47,11 +47,23 @@ export const auth = betterAuth({
     },
   },
   email: {
-    requireEmailVerification: true,
+    requireEmailVerification: false,
+  },
+  session: {
+    // Cache the session (id/email/name) in a signed cookie so `getSession()`
+    // does not hit Postgres on every request. The proxy and route handlers call
+    // `getSession()` multiple times per request; without this, each call was
+    // 2-3 extra round-trips to Supabase (100-200ms each) and exhausted the
+    // session pooler under load. Role is still read fresh from `core.UserProfiles`,
+    // so role changes take effect immediately; only session validity is cached.
+    cookieCache: {
+      enabled: true,
+      maxAge: 300, // 5 minutes
+    },
   },
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    requireEmailVerification: false,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url, token }, request) => {
       console.log(`[auth] password reset requested for ${user.email}; url=${url}`);
@@ -71,7 +83,11 @@ export const auth = betterAuth({
   },
   advanced: {
     database: {
-      generateId: "uuid",
+      // The drizzle adapter hardcodes `supportsUUIDs: true` for Postgres, so
+      // `generateId: "uuid"` defers id generation to the DB default. The auth
+      // tables use `varchar(36)` ids with no DB default, which makes inserts
+      // fail (null id). Generate the uuid in-app instead.
+      generateId: () => crypto.randomUUID(),
     },
   },
   secret: process.env.BETTER_AUTH_SECRET!,

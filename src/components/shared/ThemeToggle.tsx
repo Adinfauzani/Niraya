@@ -22,7 +22,7 @@ const themeOptions = [
 
 /**
  * Theme switcher. The preference is persisted under the `niraya-theme` key;
- * an inline script in `index.html` applies it before paint.
+ * an inline script in the root layout applies it before paint.
  */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()

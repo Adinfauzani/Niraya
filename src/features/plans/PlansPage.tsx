@@ -64,7 +64,7 @@ export function PlansPage() {
               Plans
             </Link>
             <Link
-              href="/menu"
+              href="/search"
               className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--plans-muted)] transition-colors hover:bg-[var(--plans-green-soft)]/60 hover:text-[var(--plans-ink)]"
             >
               Menu
@@ -188,7 +188,7 @@ export function PlansPage() {
               </p>
             </div>
 
-            <div className="mt-8 grid gap-5 lg:grid-cols-3 lg:items-stretch">
+            <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
               {PLAN_DEFINITIONS.map((plan) => (
                 <PricingCard key={plan.id} plan={plan} />
               ))}
@@ -328,7 +328,7 @@ export function PlansPage() {
               Plans
             </Link>
             <Link
-              href="/menu"
+              href="/search"
               className="text-[var(--plans-muted)] transition-colors hover:text-[var(--plans-ink)]"
             >
               Menu

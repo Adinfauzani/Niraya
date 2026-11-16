@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { PLAN_DEFINITIONS } from "@/lib/plans";
 import { db } from "@/server/db";
 import { subscriptions, plans } from "@/server/db/schema/platform";
 
@@ -9,6 +10,14 @@ export type PlanEntitlements = {
   features?: string[];
 };
 
+const FREE_ENTITLEMENTS: PlanEntitlements =
+  PLAN_DEFINITIONS.find((plan) => plan.tier === "free")?.entitlements ?? {
+    maxUsers: 3,
+    maxStores: 1,
+    maxProducts: 50,
+    features: ["pos", "pos_basic", "reports", "multi_store", "api"],
+  };
+
 async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitlements | null> {
   const subscription = await db.query.subscriptions.findFirst({
     where: and(
@@ -18,12 +27,7 @@ async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitl
   });
 
   if (!subscription) {
-    return {
-      maxUsers: 1,
-      maxStores: 1,
-      maxProducts: 50,
-      features: ["pos_basic"],
-    };
+    return FREE_ENTITLEMENTS;
   }
 
   const plan = await db.query.plans.findFirst({

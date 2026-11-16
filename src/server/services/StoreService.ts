@@ -1,9 +1,6 @@
-import { eq } from "drizzle-orm";
-
-import { db } from "@/server/db";
-import { stores } from "@/server/db/schema";
 import { StoreRepository } from "@/server/repositories/core";
 import { checkStoreLimit, checkFeatureAccess } from "@/server/entitlements/check";
+import { generateUniqueInviteCode, isInviteCodeTaken } from "@/server/stores/invite";
 import type { EntityStatus } from "@/types/business";
 
 const storeRepository = new StoreRepository();
@@ -65,11 +62,19 @@ export async function createStore(
     throw new Error(storeCheck.message || "Batas toko tercapai. Upgrade paket untuk menambah toko.");
   }
 
+  // Store code doubles as the invite code, so it must be globally unique.
+  let code = data.code.trim().toUpperCase();
+  if (!code) {
+    code = await generateUniqueInviteCode();
+  } else if (await isInviteCodeTaken(code)) {
+    throw new Error("Kode toko sudah digunakan toko lain. Gunakan kode lain.");
+  }
+
   await storeRepository.create({
     id: data.id,
     businessId,
     name: data.name.trim(),
-    code: data.code.trim().toUpperCase(),
+    code,
     address: data.address?.trim() || null,
     phone: data.phone?.trim() || null,
     email: data.email?.trim() || null,
@@ -94,9 +99,18 @@ export async function updateStore(
     isActive?: boolean;
   }
 ): Promise<{ ok: true }> {
+  // Store code doubles as the invite code, so it must stay globally unique.
+  const code = data.code.trim().toUpperCase();
+  if (!code) {
+    throw new Error("Kode toko wajib diisi.");
+  }
+  if (await isInviteCodeTaken(code, id)) {
+    throw new Error("Kode toko sudah digunakan toko lain. Gunakan kode lain.");
+  }
+
   await storeRepository.update(id, {
     name: data.name.trim(),
-    code: data.code.trim().toUpperCase(),
+    code,
     address: data.address?.trim() || null,
     phone: data.phone?.trim() || null,
     email: data.email?.trim() || null,

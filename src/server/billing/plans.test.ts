@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  findPlanDefinition,
   PLAN_CATALOG,
   toResolvedPlan,
 } from "@/server/billing/plans";
@@ -41,6 +42,37 @@ describe("PLAN_CATALOG", () => {
   test("no duplicate gumroad product ids", () => {
     const ids = PLAN_CATALOG.map((p) => p.gumroadProductId);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("findPlanDefinition", () => {
+  const paidPlans = PLAN_CATALOG.filter((plan) => plan.tier !== "free");
+
+  test("matches by gumroadProductId", () => {
+    for (const plan of paidPlans) {
+      expect(findPlanDefinition([plan.gumroadProductId])?.code).toBe(plan.code);
+    }
+  });
+
+  test("matches by gumroadPermalink", () => {
+    for (const plan of paidPlans) {
+      expect(findPlanDefinition([plan.gumroadPermalink])?.code).toBe(plan.code);
+    }
+  });
+
+  test("matches when product_id misses but permalink hits", () => {
+    const plan = PLAN_CATALOG.find((p) => p.tier === "starter")!;
+    const result = findPlanDefinition([
+      "product-id-yang-tidak-dikenal",
+      plan.gumroadPermalink,
+    ]);
+    expect(result?.code).toBe(plan.code);
+  });
+
+  test("returns null for the free plan or empty candidates", () => {
+    expect(findPlanDefinition([""])).toBeNull();
+    expect(findPlanDefinition(["unknown", "   ", null, undefined])).toBeNull();
+    expect(findPlanDefinition([])).toBeNull();
   });
 });
 

@@ -46,48 +46,6 @@ export const roles = core.table(
   ]
 );
 
-/** Permission granular untuk RBAC. */
-export const permissions = core.table(
-  "Permissions",
-  {
-    code: text("Code").primaryKey(),
-    name: text("Name").notNull(),
-    description: text("Description"),
-    module: text("Module").notNull(),
-    createdAt: timestamp("CreatedAt", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [
-    unique("Permissions_Name_key").on(t.name),
-    index("Permissions_Module_idx").on(t.module),
-  ]
-);
-
-/** Pemetaan many-to-many role ke permission. */
-export const rolePermissions = core.table(
-  "RolePermissions",
-  {
-    roleCode: text("RoleCode")
-      .notNull()
-      .references(() => roles.code, { onDelete: "cascade" }),
-    permissionCode: text("PermissionCode")
-      .notNull()
-      .references(() => permissions.code, { onDelete: "cascade" }),
-    createdAt: timestamp("CreatedAt", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [
-    primaryKey({
-      name: "RolePermissions_pkey",
-      columns: [t.roleCode, t.permissionCode],
-    }),
-    index("RolePermissions_RoleCode_idx").on(t.roleCode),
-    index("RolePermissions_PermissionCode_idx").on(t.permissionCode),
-  ]
-);
-
 /** Entitas bisnis. Satu instalasi dapat memiliki satu atau banyak bisnis. */
 export const businesses = core.table(
   "Businesses",
@@ -149,6 +107,10 @@ export const stores = core.table(
   ]
 );
 
+/** Paket langganan yang dicerminkan di `UserProfiles.Plan`. */
+export const USER_PLANS = ["free", "starter", "plus", "pro"] as const;
+export type UserPlan = (typeof USER_PLANS)[number];
+
 /** Profil aplikasi untuk identitas Supabase Auth.
  * Primary key (Id) matches auth.users.id for direct FK relationship.
  * RLS policies enforce that users can only access their own profile.
@@ -165,6 +127,7 @@ export const userProfiles = core.table(
       .notNull()
       .default("user")
       .references(() => roles.code, { onDelete: "restrict" }),
+    plan: text("Plan").notNull().default("free"),
     createdAt: timestamp("CreatedAt", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -175,8 +138,13 @@ export const userProfiles = core.table(
   },
   (t) => [
     index("UserProfiles_Role_idx").on(t.role),
+    index("UserProfiles_Plan_idx").on(t.plan),
     index("UserProfiles_Email_idx").on(t.email),
     index("UserProfiles_Phone_idx").on(t.phone),
+    check(
+      "UserProfiles_Plan_check",
+      sql`${t.plan} in ('free', 'starter', 'plus', 'pro')`
+    ),
   ]
 );
 

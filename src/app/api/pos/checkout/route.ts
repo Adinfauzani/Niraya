@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 
@@ -76,7 +77,11 @@ export async function POST(request: Request) {
     }
 
     const payload = parsed.data;
-    const context = await getBusinessContext(user.id);
+    const cookieStore = await cookies();
+    const context = await getBusinessContext(user.id, {
+      businessId: cookieStore.get("niraya_selected_business")?.value ?? null,
+      storeId: cookieStore.get("niraya_selected_store")?.value ?? null,
+    });
     if (!context?.businessId) {
       return NextResponse.json(
         { error: "Tidak ada konteks bisnis aktif. Silakan selesaikan onboarding." },

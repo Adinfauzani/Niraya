@@ -5,9 +5,16 @@ import { Button } from "@/components/ui/button"
 import { formatPlanPrice, type PlanDefinition } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 
-export function PricingCard({ plan }: { plan: PlanDefinition }) {
+export function PricingCard({
+  plan,
+  currentTier,
+}: {
+  plan: PlanDefinition
+  currentTier?: string | null
+}) {
   const highlighted = plan.highlighted
   const premium = plan.tier === "pro"
+  const isCurrent = currentTier === plan.tier
 
   return (
     <article
@@ -18,6 +25,7 @@ export function PricingCard({ plan }: { plan: PlanDefinition }) {
           : premium
             ? "border-[var(--plans-gold)]/35 bg-[var(--plans-paper)] text-[var(--plans-ink)] shadow-[0_22px_70px_-60px_rgba(18,44,32,0.45)] ring-1 ring-[var(--plans-gold)]/15"
             : "border-[var(--plans-line)] bg-[var(--plans-paper)] text-[var(--plans-ink)] shadow-[0_22px_70px_-60px_rgba(18,44,32,0.45)]",
+        isCurrent && "ring-2 ring-[var(--plans-green)]/40",
       )}
     >
       {highlighted ? (
@@ -41,7 +49,11 @@ export function PricingCard({ plan }: { plan: PlanDefinition }) {
             {plan.tagline}
           </p>
         </div>
-        {highlighted ? (
+        {isCurrent ? (
+          <Badge className="shrink-0 rounded-full border border-[var(--plans-gold)]/35 bg-[var(--plans-gold)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--plans-green-deep)]">
+            Paket Anda
+          </Badge>
+        ) : highlighted ? (
           <Badge className="shrink-0 rounded-full border border-[var(--plans-gold)]/35 bg-[var(--plans-gold)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--plans-green-deep)]">
             Most popular
           </Badge>

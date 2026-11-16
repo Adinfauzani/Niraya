@@ -48,12 +48,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isRegularUser = realUser?.role === "user"
   const isProfileRoute = pathname === "/profile" || pathname.startsWith("/(profile)") || pathname.startsWith("/profile") || pathname.startsWith("/user-profile")
+  const isOnboardingRoute =
+    pathname === "/onboarding" ||
+    pathname.startsWith("/onboarding/") ||
+    pathname === "/dashboard/onboarding" ||
+    pathname.startsWith("/dashboard/onboarding/")
 
   useEffect(() => {
+    if (isOnboardingRoute) return
     if (isRegularUser && isProfileRoute) return
     void hydrate()
     void loadBusinesses()
-  }, [hydrate, loadBusinesses, isRegularUser, isProfileRoute])
+  }, [hydrate, loadBusinesses, isRegularUser, isProfileRoute, isOnboardingRoute])
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY))
@@ -70,7 +76,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     )
   }, [sidebarWidth])
 
-  const shouldSkipBusinessLoad = isRegularUser && isProfileRoute
+  const shouldSkipBusinessLoad = isOnboardingRoute || (isRegularUser && isProfileRoute)
 
   return (
     <div

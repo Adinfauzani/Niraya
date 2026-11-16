@@ -26,7 +26,6 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-docs
 
 # vercel
 .vercel
@@ -49,4 +48,4 @@ drizzle/meta
 
 # docs/agent (local)
 AGENTS.md
-docs/
+/docs/

@@ -88,6 +88,69 @@ export type Transaction = {
   voidReason?: string
 }
 
+export type OrderStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'ACCEPTED'
+  | 'PREPARING'
+  | 'READY'
+  | 'COMPLETED'
+  | 'CANCELLED'
+
+export type OrderPaymentStatus =
+  | 'UNPAID'
+  | 'PENDING'
+  | 'PAID'
+  | 'FAILED'
+  | 'EXPIRED'
+  | 'PARTIALLY_REFUNDED'
+  | 'REFUNDED'
+
+export type OrderSource = 'POS' | 'STOREFRONT' | 'QR_TABLE' | 'QR_GENERAL'
+
+export type OrderItem = {
+  id: string
+  productId: string
+  productName: string
+  sku: string | null
+  variantName: string | null
+  quantity: number
+  unitPrice: number
+  discountTotal: number
+  taxTotal: number
+  subtotal: number
+  notes: string | null
+}
+
+export type Order = {
+  id: string
+  /** Human-facing order number, e.g. `ORD-1042`. */
+  number: string
+  source: OrderSource
+  status: OrderStatus
+  paymentStatus: OrderPaymentStatus
+  customerName: string
+  customerPhone: string | null
+  orderType: string
+  tableNumber: string | null
+  paymentMethod: string | null
+  currency: string
+  subtotal: number
+  discountTotal: number
+  taxTotal: number
+  grandTotal: number
+  amountPaid: number | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  items: OrderItem[]
+}
+
+export type OrderCounts = Record<OrderStatus, number> & {
+  /** Alias for SUBMITTED; orders awaiting acceptance. */
+  pending: number
+}
+
 export type StockMovementType = 'in' | 'out' | 'adjustment' | 'sale' | 'void'
 
 export type StockMovement = {

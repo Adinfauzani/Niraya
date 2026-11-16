@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { subscriptions, webhookEvents } from "@/server/db/schema";
 import { resolvePlanForProduct } from "./plans";
+import { syncOwnerPlanForBusiness } from "./subscriptions";
 
 type GumroadPayload = Record<string, unknown>;
 
@@ -203,13 +204,13 @@ async function handleSale(payload: GumroadPayload): Promise<ProcessResult> {
     return { ignored: true, reason: "bukan penjualan membership" };
   }
 
-  const productId =
-    asString(payload.product_id) ?? asString(payload.product_permalink);
-  const plan = await resolvePlanForProduct(productId);
+  const productId = asString(payload.product_id);
+  const productPermalink = asString(payload.product_permalink);
+  const plan = await resolvePlanForProduct(productId, productPermalink);
   if (!plan) {
     return {
       ignored: true,
-      reason: `product_id belum dipetakan: ${productId ?? "(kosong)"}`,
+      reason: `product belum dipetakan: ${productId ?? productPermalink ?? "(kosong)"}`,
     };
   }
 
@@ -383,7 +384,9 @@ async function handleSubscriptionUpdated(
   const newPlan = readObject(payload.new_plan);
   const newProductId =
     asString(newPlan?.product_id) ?? asString(payload.product_id);
-  const plan = await resolvePlanForProduct(newProductId);
+  const newProductPermalink =
+    asString(newPlan?.product_permalink) ?? asString(payload.product_permalink);
+  const plan = await resolvePlanForProduct(newProductId, newProductPermalink);
   const recurrence =
     asString(newPlan?.recurrence) ?? asString(payload.recurrence);
   const quantity = asOptionalNumber(newPlan?.quantity);
@@ -473,6 +476,33 @@ async function handleDispute(
 }
 
 export async function processGumroadEvent(
+  resource: string,
+  payload: GumroadPayload
+): Promise<ProcessResult> {
+  const result = await dispatchGumroadEvent(resource, payload);
+
+  // Mirror plan aktif ke `core.UserProfiles.Plan` milik owner bisnis.
+  if (result.subscriptionId) {
+    try {
+      const [row] = await db
+        .select({ businessId: subscriptions.businessId })
+        .from(subscriptions)
+        .where(
+          eq(subscriptions.providerSubscriptionId, result.subscriptionId)
+        )
+        .limit(1);
+      if (row?.businessId) {
+        await syncOwnerPlanForBusiness(row.businessId);
+      }
+    } catch (error) {
+      console.error("syncOwnerPlanForBusiness failed:", error);
+    }
+  }
+
+  return result;
+}
+
+async function dispatchGumroadEvent(
   resource: string,
   payload: GumroadPayload
 ): Promise<ProcessResult> {

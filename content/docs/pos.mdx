@@ -1,0 +1,52 @@
+---
+title: Kasir dan transaksi
+description: "Cara membuat transaksi, memilih metode pembayaran, mencetak struk, dan membatalkan penjualan di Niraya POS."
+---
+
+Halaman kasir adalah layar utama untuk transaksi harian. Tata letaknya dibuat agar perangkat apa pun bisa dipakai: tablet di meja kasir, laptop, atau ponsel.
+
+## Membuat transaksi
+
+Pilih produk dari katalog di sebelah kiri. Setiap klik menambah satu unit ke keranjang. Gunakan pencarian atau filter kategori jika daftar produk panjang.
+
+1. Pilih produk, atur jumlah bila perlu.
+2. Periksa ringkasan keranjang di sebelah kanan.
+3. Klik **Bayar** untuk membuka dialog pembayaran.
+
+<Callout title="Stok berkurang otomatis">
+  Stok produk langsung diperbarui setelah transaksi selesai. Jika stok tidak mencukupi, sistem
+  menolak transaksi sebelum pembayaran dicatat.
+</Callout>
+
+## Metode pembayaran
+
+Niraya mendukung tiga metode utama. Pilih metode yang sesuai dengan cara pelanggan membayar.
+
+| Metode     | Kapan dipakai                                                                     |
+| ---------- | --------------------------------------------------------------------------------- |
+| **Tunai**  | Pelanggan membayar dengan uang fisik. Masukkan nominal yang diterima.             |
+| **QRIS**   | Pelanggan memindai kode QR dari GoPay, OVO, DANA, ShopeePay, atau m-banking.      |
+| **EDC**    | Pembayaran kartu melalui mesin EDC di lokasi.                                     |
+
+<Callout type="warn" title="QRIS dicatat manual">
+  Niraya menampilkan kode QRIS, tetapi verifikasi pembayaran dilakukan oleh kasir. Pastikan dana
+  benar-benar masuk sebelum menyelesaikan transaksi.
+</Callout>
+
+## Menghitung kembalian
+
+Saat metode tunai, sistem menghitung kembalian secara otomatis dari nominal yang diterima. Tampilkan nominal tersebut ke pelanggan sebelum menyerahkan uang kembali.
+
+```text title="Contoh"
+Total belanja : Rp 47.000
+Diterima      : Rp 50.000
+Kembalian     : Rp 3.000
+```
+
+## Struk
+
+Setelah transaksi selesai, struk dapat dicetak langsung atau dibuka sebagai berkas. Gunakan printer thermal 58mm atau 80mm yang terpasang di perangkat kasir.
+
+## Membatalkan transaksi
+
+Transaksi yang sudah selesai tidak dihapus, tetapi dapat dibatalkan (void) dari halaman transaksi. Pembatalan tercatat di audit log beserta pengguna yang melakukannya.
