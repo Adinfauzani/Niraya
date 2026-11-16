@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CheckIcon,
   CopyIcon,
+  InfoIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
@@ -10,6 +12,7 @@ import {
   Trash2Icon,
   UserRoundIcon,
   UsersIcon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,6 +67,45 @@ const ROLE_BADGE_VARIANT: Record<AppRole, "default" | "info" | "warning" | "seco
   cashier: "secondary",
   user: "outline",
 };
+
+const ACCESS_MATRIX: Array<{ area: string; minRole: string; note: string }> = [
+  { area: "Kelola kategori & produk", minRole: "Manager", note: "Buat/ubah; hapus butuh Owner" },
+  { area: "Kelola pelanggan", minRole: "Manager", note: "Buat/ubah; hapus butuh Owner" },
+  { area: "Penyesuaian stok", minRole: "Manager", note: "Stok masuk/keluar/penyesuaian" },
+  { area: "Void transaksi & kelola QR", minRole: "Manager", note: "Batalkan transaksi, atur QR ordering" },
+  { area: "Kelola pesanan (QR/storefront)", minRole: "Kasir", note: "Ubah status pesanan & verifikasi pembayaran QR" },
+  { area: "Kelola staff operasional & akses pengguna", minRole: "Admin", note: "Ubah role/hapus profil anggota (dengan batasan)" },
+  { area: "Pengaturan bisnis & maintenance", minRole: "Admin", note: "Ubah pengaturan toko/bisnis" },
+  { area: "Kelola toko & hapus data kritis", minRole: "Owner", note: "Buat/hapus toko, hapus kategori/produk/pelanggan/staff" },
+];
+
+const ROLE_LIMITS: Array<{ role: string; can: string[]; cannot: string[] }> = [
+  {
+    role: "User",
+    can: ["Login & profil dasar", "Bergabung ke toko dengan kode"],
+    cannot: ["Akses operasional dashboard/POS", "Mengelola data bisnis"],
+  },
+  {
+    role: "Kasir",
+    can: ["Operasional kasir/POS", "Kelola status pesanan & verifikasi pembayaran QR"],
+    cannot: ["Ubah katalog/stok/pengaturan", "Kelola staff & akses pengguna"],
+  },
+  {
+    role: "Manager",
+    can: ["Kelola kategori, produk, pelanggan", "Penyesuaian stok, void transaksi, kelola QR"],
+    cannot: ["Ubah pengaturan bisnis/role pengguna", "Buat/hapus toko, hapus data kritis"],
+  },
+  {
+    role: "Admin",
+    can: ["Semua akses Manager", "Kelola staff operasional & role pengguna", "Ubah pengaturan bisnis"],
+    cannot: ["Buat/hapus toko", "Hapus data kritis (kategori/produk/pelanggan/staff)", "Menurunkan/mengeluarkan owner terakhir"],
+  },
+  {
+    role: "Owner",
+    can: ["Akses penuh bisnis", "Kelola toko & hapus data kritis", "Atur semua pengaturan & akses"],
+    cannot: ["Owner terakhir tidak bisa diturunkan atau dikeluarkan dari sini"],
+  },
+];
 
 function readError(e: unknown, fallback: string) {
   return e instanceof Error && e.message ? e.message : fallback;
@@ -263,6 +305,77 @@ export function StaffPage() {
         <StatTile label="Akses operasional" value={formatNumber(activeOpsCount)} hint="Owner/admin/manager/kasir" icon={ShieldCheckIcon} tone="info" />
         <StatTile label="User dasar" value={formatNumber(basicUserCount)} hint="Role default anggota" icon={UserRoundIcon} />
         <StatTile label="Owner" value={formatNumber(ownerCount)} hint="Owner terakhir dilindungi" icon={ShieldCheckIcon} tone="warning" />
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-start gap-3 border-b border-border p-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <InfoIcon aria-hidden="true" className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold">Keterangan role & batas akses</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Role menentukan fitur yang bisa diakses. Perubahan role mengikuti izin (umumnya Admin/Owner) dan ada batasan pengaman.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Akses per area</p>
+            <div className="overflow-hidden rounded-lg border border-border/70">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Area / aksi</th>
+                    <th className="px-3 py-2 font-medium">Minimal role</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {ACCESS_MATRIX.map((item) => (
+                    <tr key={item.area} className="align-top">
+                      <td className="px-3 py-2">
+                        <p className="font-medium leading-snug">{item.area}</p>
+                        <p className="text-xs text-muted-foreground">{item.note}</p>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <Badge variant="outline">{item.minRole}+</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Batasan pengaman: owner terakhir tidak bisa diturunkan atau dikeluarkan; penghapusan data kritis dibatasi ke Owner.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ringkasan per role</p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              {ROLE_LIMITS.map((item) => (
+                <div key={item.role} className="rounded-lg border border-border/70 p-3">
+                  <p className="text-sm font-semibold">{item.role}</p>
+                  <div className="mt-2 space-y-1.5">
+                    {item.can.map((text) => (
+                      <p key={text} className="flex items-start gap-1.5 text-xs text-foreground/90">
+                        <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
+                        <span>{text}</span>
+                      </p>
+                    ))}
+                    {item.cannot.map((text) => (
+                      <p key={text} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <XIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                        <span>{text}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">

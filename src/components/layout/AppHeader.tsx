@@ -1,9 +1,45 @@
 "use client"
 
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/shared/ThemeToggle"
+import * as React from "react"
+import { id as localeId } from "date-fns/locale"
+import { CalendarDays, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+
 import { AppBreadcrumb } from "@/components/layout/AppBreadcrumb"
+import { ThemeToggle } from "@/components/shared/ThemeToggle"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+
+function NavbarCalendar() {
+  const [date, setDate] = React.useState<Date | undefined>(() => new Date())
+  const [open, setOpen] = React.useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Buka kalender" title="Kalender">
+          <CalendarDays className="size-5" aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="end">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={(value) => {
+            setDate(value)
+          }}
+          locale={localeId}
+          defaultMonth={date}
+          className="rounded-lg border-0"
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export function AppHeader({
   collapsed,
@@ -31,7 +67,8 @@ export function AppHeader({
       <div className="flex min-w-0 items-center">
         <AppBreadcrumb />
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-1">
+        <NavbarCalendar />
         <ThemeToggle />
       </div>
     </header>
