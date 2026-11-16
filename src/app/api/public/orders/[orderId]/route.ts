@@ -6,6 +6,8 @@ import { getSession } from "@/lib/auth";
 import { getGuestTokenFromRequest, resolveGuestAccess } from "@/server/storefront/GuestAccess";
 import { getClientIp, rateLimitAsync, rateLimitResponse } from "@/server/security/RateLimit";
 
+export const runtime = "nodejs";
+
 export async function GET(request: Request, { params }: { params: Promise<{ orderId: string }> }) {
   const ip = getClientIp(request); const rl = await rateLimitAsync(`public:order:${ip}`, { limit: 60, windowMs: 60_000 });
   if (!rl.ok) return rateLimitResponse(rl.resetAt);

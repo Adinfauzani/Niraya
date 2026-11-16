@@ -6,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { ensureUserProfile, requireRole, ACTION_ROLES } from "@/server/auth/session";
 
+export const runtime = "nodejs";
+
 const DEFAULT_ESTIMATED_HOURS = 48;
 
 const maintenanceSchema = z.object({

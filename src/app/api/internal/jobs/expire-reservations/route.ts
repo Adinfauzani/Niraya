@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { expireReservations } from "@/server/storefront/payments";
 import { getClientIp, rateLimitAsync, rateLimitResponse, stableRateKey } from "@/server/security/RateLimit";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const secret = process.env.INTERNAL_CRON_SECRET;
   if (secret) {

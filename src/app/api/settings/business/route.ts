@@ -19,6 +19,8 @@ import {
 import { ACTION_ROLES, ensureUserProfile, requireRole } from "@/server/auth/session";
 import { requireTenantContext, requireAnyRole } from "@/server/auth/authorization";
 
+export const runtime = "nodejs";
+
 function moneyPercentToRate(v: unknown, fallback = 0) {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;

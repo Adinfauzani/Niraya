@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { initializeUserWorkspace, checkInitializationStatus } from "@/server/auth/initialization";
 
+export const runtime = "nodejs";
+
 export async function POST() {
   const session = await getSession();
   const sessionUser =

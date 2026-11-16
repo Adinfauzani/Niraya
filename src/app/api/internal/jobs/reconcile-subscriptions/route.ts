@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 
 import { reconcileSubscriptions } from "@/server/billing/SubscriptionReconciliation";
 
+export const runtime = "nodejs";
+
 const INTERNAL_CRON_SECRET = process.env.INTERNAL_CRON_SECRET;
 
 export async function POST() {

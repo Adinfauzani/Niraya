@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { ensureUserProfile } from "@/server/auth/session";
 import { getBillingSummaryForUser } from "@/server/billing/subscriptions";
 
+export const runtime = "nodejs";
+
 export const dynamic = "force-dynamic";
 
 export async function GET() {

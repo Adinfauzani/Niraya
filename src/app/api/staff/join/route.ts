@@ -9,6 +9,8 @@ import { ensureUserProfile } from "@/server/auth/session";
 import { getSession } from "@/lib/auth";
 import { checkUserLimit } from "@/server/entitlements/check";
 
+export const runtime = "nodejs";
+
 const JoinSchema = z.object({
   code: z.string().trim().min(1, "Kode toko wajib diisi.").max(32),
 });

@@ -9,6 +9,8 @@ import {
   listOrders,
 } from "@/server/services/OrderService";
 
+export const runtime = "nodejs";
+
 export const dynamic = "force-dynamic";
 
 function resolveError(error: unknown): { status: number; message: string } {

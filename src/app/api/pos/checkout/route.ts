@@ -10,6 +10,8 @@ import { executePosCheckout } from "@/server/pos/CheckoutCore";
 import { getMaintenanceConfig, resolveEstimatedEndAt } from "@/server/maintenance";
 import { getBusinessContext } from "@/server/auth/BusinessContext";
 
+export const runtime = "nodejs";
+
 async function checkMaintenanceMode(): Promise<{ enabled: boolean; estimatedEndAt: Date | null }> {
   const config = await getMaintenanceConfig();
   if (!config.enabled) {

@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { getBusinessEntitlements, hasActiveEntitlement } from "@/server/billing/SubscriptionReconciliation";
 import { requireTenantContext } from "@/lib/tenant";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     const session = await getSession();

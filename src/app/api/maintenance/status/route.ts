@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getMaintenanceConfig, resolveEstimatedEndAt } from "@/server/maintenance";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     const config = await getMaintenanceConfig();

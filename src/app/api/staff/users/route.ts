@@ -8,6 +8,8 @@ import { ensureUserProfile, requireRole } from "@/server/auth/session";
 import { requireBusinessContext } from "@/server/auth/routeContext";
 import { getSession } from "@/lib/auth";
 
+export const runtime = "nodejs";
+
 const APP_ROLES = ["user", "cashier", "manager", "admin", "owner"] as const;
 type AppRole = (typeof APP_ROLES)[number];
 

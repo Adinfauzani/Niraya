@@ -9,6 +9,8 @@ import { assertSameOriginIfCookieAuth } from "@/server/storefront/RequestSecurit
 import { submitPaymentProof } from "@/server/storefront/payments";
 import { storePaymentProof } from "@/server/storage/PaymentProof";
 
+export const runtime = "nodejs";
+
 const Meta = z.object({ orderId: z.string().min(1), paymentId: z.string().uuid(), referenceNumber: z.string().max(100).optional() });
 export async function POST(request: Request) {
   const ip = getClientIp(request); const rl = await rateLimitAsync(`public:proof:${ip}`, { limit: 10, windowMs: 60_000 });

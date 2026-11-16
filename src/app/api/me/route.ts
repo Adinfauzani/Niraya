@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { ensureUserProfile, normalizeRole, normalizePlan } from "@/server/auth/session";
 
+export const runtime = "nodejs";
+
 /**
  * Mengembalikan akun yang sedang login beserta role aplikasinya.
  * Profil dibuat otomatis dengan role `user` jika belum ada.

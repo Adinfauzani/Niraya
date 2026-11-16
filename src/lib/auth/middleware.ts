@@ -21,7 +21,7 @@ const MAINTENANCE_BYPASS_PATHS = [
   "/verify",
 ];
 
-const MAINTENANCE_CACHE_TTL_MS = 15_000;
+const MAINTENANCE_CACHE_TTL_MS = 60_000;
 let maintenanceCache: {
   enabled: boolean;
   estimatedEndAt: string | null;
@@ -45,8 +45,8 @@ type CachedAuthContext = {
   expiresAt: number;
 };
 
-const AUTH_CONTEXT_CACHE_TTL_MS = 30_000;
-const AUTH_CONTEXT_CACHE_MAX_ENTRIES = 2000;
+const AUTH_CONTEXT_CACHE_TTL_MS = 120_000;
+const AUTH_CONTEXT_CACHE_MAX_ENTRIES = 5000;
 const authContextCache = new Map<string, CachedAuthContext>();
 
 function readCachedAuth(token: string | undefined): CachedAuthContext | null {

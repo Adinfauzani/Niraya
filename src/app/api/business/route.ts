@@ -41,6 +41,8 @@ import {
 } from "@/server/auth/routeContext";
 import { getMaintenanceConfig, resolveEstimatedEndAt } from "@/server/maintenance";
 
+export const runtime = "nodejs";
+
 async function checkMaintenanceMode(): Promise<{ enabled: boolean; startedAt: Date | null; estimatedEndAt: Date | null }> {
   const config = await getMaintenanceConfig();
   if (!config.enabled) {

@@ -6,6 +6,8 @@ import { db } from "@/server/db";
 import { webhookEvents, subscriptions } from "@/server/db/schema";
 import crypto from "crypto";
 
+export const runtime = "nodejs";
+
 const GUMROAD_WEBHOOK_SECRET = process.env.GUMROAD_WEBHOOK_SECRET;
 
 function verifySignature(payload: string, signature: string | null): boolean {

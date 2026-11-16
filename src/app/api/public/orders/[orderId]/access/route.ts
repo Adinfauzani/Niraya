@@ -3,6 +3,8 @@ import { getClientIp, rateLimitAsync, rateLimitResponse, stableRateKey } from "@
 import { assertSameOriginIfCookieAuth } from "@/server/storefront/RequestSecurity";
 import { getGuestTokenFromRequest, guestCookieHeader, rotateGuestAccess } from "@/server/storefront/GuestAccess";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request, ctx: { params: Promise<{ orderId: string }> }) {
   const ip = getClientIp(request);
   const rl = await rateLimitAsync(`public:access-rotate:${stableRateKey([ip])}`, { limit: 20, windowMs: 60_000 });

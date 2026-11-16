@@ -7,6 +7,8 @@ import { executeStorefrontCheckout } from "@/server/storefront/checkout";
 import { guestCookieHeader } from "@/server/storefront/GuestAccess";
 import { getMaintenanceConfig } from "@/server/maintenance";
 
+export const runtime = "nodejs";
+
 async function checkMaintenanceMode(): Promise<{ enabled: boolean; estimatedEndAt: Date | null }> {
   const config = await getMaintenanceConfig();
   if (!config.enabled) {

@@ -5,6 +5,8 @@ import { userProfiles } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+export const runtime = "nodejs";
+
 const profileSchema = z.object({
   name: z.string().min(1, "Nama tidak boleh kosong").max(100).optional(),
   phone: z.string().max(20).optional().nullable(),

@@ -6,6 +6,8 @@ import { db } from "@/server/db";
 import { businesses, stores } from "@/server/db/schema";
 import { and, eq } from "drizzle-orm";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const session = await getSession();

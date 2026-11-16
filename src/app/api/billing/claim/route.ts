@@ -11,6 +11,8 @@ import {
   getPrimaryBusinessForUser,
 } from "@/server/billing/subscriptions";
 
+export const runtime = "nodejs";
+
 export const dynamic = "force-dynamic";
 
 /**

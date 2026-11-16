@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant";
 import { checkFeatureAccess } from "@/lib/featureGating";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const session = await getSession();
   const user = (session as any)?.user ?? (session as any)?.data?.user ?? null;

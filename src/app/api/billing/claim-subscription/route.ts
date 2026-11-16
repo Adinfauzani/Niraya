@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { getSubscriptionByEmail, claimSubscription, getActiveSubscription, getBusinessEntitlements } from "@/server/billing/SubscriptionReconciliation";
 import { requireTenantContext } from "@/lib/tenant";
 
+export const runtime = "nodejs";
+
 export async function POST() {
   try {
     const session = await getSession();
