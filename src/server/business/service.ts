@@ -251,9 +251,7 @@ export async function getBusinessData(
     db
       .select()
       .from(products)
-      .where(and(...productFilters))
-      .limit(pageSize)
-      .offset(offset),
+      .where(and(...productFilters)),
     db
       .select()
       .from(customers)
