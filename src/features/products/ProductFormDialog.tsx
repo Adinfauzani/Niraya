@@ -70,8 +70,8 @@ export function ProductFormDialog({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
-        <SheetHeader>
+      <SheetContent className="w-full gap-0 p-0 max-h-[92svh] overflow-y-auto sm:max-w-2xl">
+        <SheetHeader className="border-b px-6 py-4">
           <SheetTitle>{product ? "Edit produk" : "Tambah produk"}</SheetTitle>
           <SheetDescription>
             {product
@@ -138,7 +138,7 @@ function ProductFormBody({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-4 px-6 py-4"
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField
@@ -397,7 +397,7 @@ function ProductFormBody({
           />
         </div>
 
-        <SheetFooter>
+        <SheetFooter className="border-t px-6 py-4">
           <Button type="button" variant="outline" onClick={onCancel}>
             Batal
           </Button>
