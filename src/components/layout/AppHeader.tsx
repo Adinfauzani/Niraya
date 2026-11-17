@@ -5,7 +5,6 @@ import { id as localeId } from "date-fns/locale"
 import { CalendarDays, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 
 import { AppBreadcrumb } from "@/components/layout/AppBreadcrumb"
-import { ThemeToggle } from "@/components/shared/ThemeToggle"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -69,7 +68,6 @@ export function AppHeader({
       </div>
       <div className="ml-auto flex items-center gap-1">
         <NavbarCalendar />
-        <ThemeToggle />
       </div>
     </header>
   )
