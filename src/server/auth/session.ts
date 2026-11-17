@@ -177,12 +177,16 @@ export async function getRoleForUser(user: SessionUser): Promise<UserRole> {
  * menulis ke DB. Jika profil belum ada, kembalikan DEFAULT_ROLE.
  */
 export async function readUserRole(userId: string): Promise<UserRole> {
-  const [profile] = await db
-    .select({ role: userProfiles.role })
-    .from(userProfiles)
-    .where(eq(userProfiles.id, userId))
-    .limit(1);
-  return normalizeRole(profile?.role);
+  try {
+    const [profile] = await db
+      .select({ role: userProfiles.role })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, userId))
+      .limit(1);
+    return normalizeRole(profile?.role);
+  } catch {
+    return DEFAULT_ROLE;
+  }
 }
 
 /**
