@@ -109,22 +109,27 @@ export async function validateStoreAccess(
 }
 
 export async function getUserTenantContext(userId: string): Promise<TenantContext | null> {
-  const [membership] = await db
-    .select({
-      businessId: businessMembers.businessId,
-      role: businessMembers.role,
-      storeId: businessMembers.storeId,
-      status: businessMembers.status,
-    })
-    .from(businessMembers)
-    .where(
-      and(
-        eq(businessMembers.userId, userId),
-        eq(businessMembers.status, "active")
+  let membership: any;
+  try {
+    [membership] = await db
+      .select({
+        businessId: businessMembers.businessId,
+        role: businessMembers.role,
+        storeId: businessMembers.storeId,
+        status: businessMembers.status,
+      })
+      .from(businessMembers)
+      .where(
+        and(
+          eq(businessMembers.userId, userId),
+          eq(businessMembers.status, "active")
+        )
       )
-    )
-    .orderBy(businessMembers.role)
-    .limit(1);
+      .orderBy(businessMembers.role)
+      .limit(1);
+  } catch {
+    return null;
+  }
 
   if (!membership) {
     return null;
