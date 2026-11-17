@@ -38,7 +38,7 @@ const productSchema = z.object({
   sku: z.string().trim().min(1, "SKU wajib diisi"),
   barcode: z.string().trim().optional(),
   categoryId: z.string().min(1, "Pilih kategori"),
-  price: z.number().min(1, "Harga jual harus lebih dari 0"),
+  price: z.number().min(0, "Harga jual tidak boleh negatif"),
   cost: z.number().min(0, "Harga modal tidak boleh negatif"),
   stock: z
     .number()
@@ -243,7 +243,7 @@ function ProductFormBody({
                   <Input
                     type="number"
                     min={0}
-                    step={1000}
+                    step={100}
                     inputMode="numeric"
                     value={field.value}
                     onChange={(event) =>
