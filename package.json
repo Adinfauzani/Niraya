@@ -16,7 +16,8 @@
     "db:seed": "bun src/server/db/seed-business.ts",
     "db:seed:platform": "bun src/server/db/seed-platform.ts",
     "db:seed:demo": "bun scripts/seed-demo-admin.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:seed:products": "bun scripts/seed-products.ts"
   },
   "dependencies": {
     "@animate-ui/react": "^2.4.6",
