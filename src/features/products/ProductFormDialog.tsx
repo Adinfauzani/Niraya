@@ -7,13 +7,13 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Form,
   FormControl,
@@ -69,16 +69,16 @@ export function ProductFormDialog({
   onSubmit: (values: ProductFormValues) => boolean;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{product ? "Edit produk" : "Tambah produk"}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle>{product ? "Edit produk" : "Tambah produk"}</SheetTitle>
+          <SheetDescription>
             {product
               ? "Perbarui informasi produk. Perubahan langsung dipakai di POS."
               : "Produk baru langsung tersedia di katalog POS setelah disimpan."}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
         <ProductFormBody
           key={product?.id ?? "new"}
@@ -89,8 +89,8 @@ export function ProductFormDialog({
             if (onSubmit(values)) onOpenChange(false);
           }}
         />
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -363,12 +363,33 @@ function ProductFormBody({
             name="imageUrl"
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel>URL gambar</FormLabel>
+                <FormLabel>Gambar produk</FormLabel>
                 <FormControl>
-                  <Input placeholder="https://…" {...field} />
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                          field.onChange(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
                 </FormControl>
+                {field.value ? (
+                  <img
+                    src={field.value}
+                    alt="Preview gambar produk"
+                    className="mt-2 h-24 w-24 rounded-md border object-cover"
+                  />
+                ) : null}
                 <FormDescription>
-                  Opsional. Biarkan kosong untuk memakai ikon produk.
+                  Opsional. Unggah dari perangkat; biarkan kosong untuk memakai ikon produk.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -376,14 +397,14 @@ function ProductFormBody({
           />
         </div>
 
-        <DialogFooter>
+        <SheetFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
             Batal
           </Button>
           <Button type="submit">
             {product ? "Simpan perubahan" : "Tambah produk"}
           </Button>
-        </DialogFooter>
+        </SheetFooter>
       </form>
     </Form>
   );
