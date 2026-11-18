@@ -4,6 +4,13 @@ Semua perubahan penting pada Niraya POS dicatat di berkas ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/)
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.1.3] - 2026-11-18
+
+### Diperbaiki
+
+- Middleware/proxy: lookup tenant database dibatasi ke rute API yang memerlukan konteks tenant (`/api/business`, `/api/pos`, `/api/staff`, `/api/settings`) dan dibuat fail-open saat lookup tenant/database gagal, sehingga beban koneksi per request berkurang dan route tidak terblokir saat pool penuh.
+- Koneksi database (Vercel/serverless): koneksi idle dilepas lebih cepat (`idle_timeout`/`max_lifetime`) untuk mengurangi kehabisan slot Supabase session pooler (`EMAXCONNSESSION`) yang dapat menghambat login/akses dashboard.
+
 ## [0.1.2] - 2026-11-18
 
 ### Ditambahkan
