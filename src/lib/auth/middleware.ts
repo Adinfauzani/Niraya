@@ -121,9 +121,10 @@ async function validateTenant(
   try {
     const context = await getUserTenantContext(userId);
     return context ? { businessId: context.businessId, storeId: context.storeId! } : null;
-  } catch (e) {
-    if (e instanceof TenantValidationError) return null;
-    throw e;
+  } catch {
+    // Fail open: DB/pool exhaustion must not crash the proxy (which would
+    // block every route, including login). Downstream handlers re-resolve.
+    return null;
   }
 }
 
@@ -134,6 +135,15 @@ export async function updateSession(request: NextRequest) {
 
   const token = request.cookies.get("better-auth.session_token")?.value;
   const cached = readCachedAuth(token);
+
+  // Hanya rute API bisnis ini yang membaca header tenant dari proxy.
+  // Lewati lookup tenant DB untuk halaman publik/navigasi agar beban koneksi
+  // DB (penting di serverless + session pooler) tidak meledak per-request.
+  const needsTenant =
+    request.nextUrl.pathname.startsWith("/api/business") ||
+    request.nextUrl.pathname.startsWith("/api/pos") ||
+    request.nextUrl.pathname.startsWith("/api/staff") ||
+    request.nextUrl.pathname.startsWith("/api/settings");
 
   let user: { id: string } | null = null;
   let tenant: { businessId: string; storeId: string } | null = null;
@@ -147,12 +157,21 @@ export async function updateSession(request: NextRequest) {
     const sessionUser = await getAuthenticatedUser(request);
     user = sessionUser ? { id: sessionUser.id } : null;
     if (sessionUser?.id) {
-      tenant = await validateTenant(request, sessionUser.id);
-      writeCachedAuth(token, {
-        userId: sessionUser.id,
-        businessId: tenant?.businessId ?? null,
-        storeId: tenant?.storeId ?? null,
-      });
+      if (needsTenant) {
+        tenant = await validateTenant(request, sessionUser.id);
+        writeCachedAuth(token, {
+          userId: sessionUser.id,
+          businessId: tenant?.businessId ?? null,
+          storeId: tenant?.storeId ?? null,
+        });
+      } else {
+        // Cache identitas user saja; tenant di-resolve saat rute API butuh.
+        writeCachedAuth(token, {
+          userId: sessionUser.id,
+          businessId: null,
+          storeId: null,
+        });
+      }
     }
   }
 

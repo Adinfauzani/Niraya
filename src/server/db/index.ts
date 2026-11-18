@@ -20,7 +20,9 @@ const connectionString = process.env.DATABASE_URL || "postgres://dummy:dummy@loc
 // multiple connections and exhaust Supabase's session pooler (pool_size 15).
 // On Vercel, each serverless function is an isolated instance, so the pool must
 // be capped at 1 per instance to avoid exhausting the pooler under concurrency.
-// Locally/dev, a small pool (5) is fine for parallel requests.
+// Locally/dev, a small pool (5) is fine for parallel requests. On Vercel we
+// also release idle connections quickly to avoid holding Supavisor session-mode
+// slots across bursts of parallel lambdas (pool_size is often 15).
 const globalForDb = globalThis as unknown as {
   nirayaSql?: ReturnType<typeof postgres>;
 };
@@ -31,9 +33,9 @@ export const sql =
     prepare: false,
     ssl: "require",
     max: process.env.VERCEL ? 1 : 5,
-    idle_timeout: 20,
+    idle_timeout: process.env.VERCEL ? 5 : 20,
     connect_timeout: 10,
-    max_lifetime: 60 * 30,
+    max_lifetime: process.env.VERCEL ? 60 * 5 : 60 * 30,
   });
 
 globalForDb.nirayaSql = sql;
