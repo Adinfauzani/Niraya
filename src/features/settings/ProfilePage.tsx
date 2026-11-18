@@ -385,7 +385,7 @@ export function ProfilePage() {
                         <div className="flex items-center justify-between gap-3 sm:justify-end">
                           <p className="text-sm font-semibold tabular-nums">{formatCurrency(Number(item.total || 0), item.currency || "IDR")}</p>
                           {item.kind === "order" && item.role === "customer" ? (
-                            <Button asChild variant="outline" size="sm" className="rounded-xl"><Link href={`/menu/order/${encodeURIComponent(item.id)}`}>Detail</Link></Button>
+                            <Button asChild variant="outline" size="sm" className="rounded-xl"><Link href={`/menu/checkout?orderId=${encodeURIComponent(item.id)}`}>Detail</Link></Button>
                           ) : null}
                         </div>
                       </li>
@@ -397,8 +397,6 @@ export function ProfilePage() {
           </div>
         </div>
       </div>
-
-      <PublicNavigation variant="mobile" />
     </div>
   )
 }

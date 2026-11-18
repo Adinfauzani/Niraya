@@ -26,15 +26,25 @@ async function loadDefaultBusinessAndStore(tx: any): Promise<{ businessId: strin
 
 /** Payment proof/verification primitives for storefront/legacy orders. */
 
-export async function submitPaymentProof(input: { orderId: string; paymentId: string; proofUrl: string; referenceNumber?: string; proofChecksum?: string | null }) {
+export async function submitPaymentProof(input: {
+  orderId: string;
+  paymentId: string;
+  proofUrl: string;
+  referenceNumber?: string;
+}) {
   const now = new Date();
-  const [row] = await db.update(payments).set({
-    proofUrl: input.proofUrl,
-    referenceNumber: input.referenceNumber ?? null,
-    proofSubmittedAt: now,
-    status: "AWAITING_VERIFICATION",
-    proofChecksum: input.proofChecksum ?? null,
-  } as any).where(and(eq(payments.id, input.paymentId), eq(payments.orderId, input.orderId))).returning();
+  const [row] = await db
+    .update(payments)
+    .set({
+      proofUrl: input.proofUrl,
+      referenceNumber: input.referenceNumber ?? null,
+      proofSubmittedAt: now,
+      status: "PENDING_VERIFICATION",
+    } as any)
+    .where(
+      and(eq(payments.id, input.paymentId), eq(payments.orderId, input.orderId)),
+    )
+    .returning();
   return row;
 }
 
@@ -49,7 +59,15 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
     const status = String(pay.status).toUpperCase();
     if (input.action === "REJECT") {
       if (status === "COMPLETED" || status === "PAID") throw Object.assign(new Error("Pembayaran sudah disetujui."), { status: 409 });
-      await tx.update(payments).set({ status: "REJECTED", rejectionReason: input.reason || "Bukti tidak valid", verifiedAt: now, verifiedByUserId: input.actorUserId } as any).where(eq(payments.id, pay.id));
+      await tx
+        .update(payments)
+        .set({
+          status: "REJECTED",
+          verificationNote: input.reason || "Bukti tidak valid",
+          verifiedAt: now,
+          verifiedByUserId: input.actorUserId,
+        } as any)
+        .where(eq(payments.id, pay.id));
       await tx.insert(orderStatusHistory).values({ orderId: order.id, fromOrderStatus: order.orderStatus, toOrderStatus: order.orderStatus, fromPaymentStatus: order.paymentStatus, toPaymentStatus: "PENDING", changedByUserId: input.actorUserId, changedByRole: "staff", reason: `Payment rejected: ${input.reason || "invalid proof"}`, createdAt: now } as any);
       return { ok: true, action: "REJECTED" };
     }
@@ -93,7 +111,16 @@ export async function verifyManualPayment(input: { paymentId: string; action: "A
       await tx.update(reservations).set({ status: "CONVERTED", convertedAt: now, updatedAt: now } as any).where(eq(reservations.id, r.id));
       await tx.insert(stockMovements).values({ id: crypto.randomUUID(), businessId: defaultBusinessId, storeId: defaultStoreId, productId: r.productId, quantityChange: -r.quantity, movementType: "sale", referenceType: "storefront_order_payment", referenceId: order.id, notes: `Paid storefront order ${order.orderNumber}`, performedByUserId: input.actorUserId, createdAt: now } as any);
     }
-    await tx.update(payments).set({ status: "COMPLETED", transactionId: txId, paidAt: now, verifiedAt: now, verifiedByUserId: input.actorUserId, rejectionReason: null } as any).where(eq(payments.id, pay.id));
+    await tx
+      .update(payments)
+      .set({
+        status: "COMPLETED",
+        transactionId: txId,
+        paidAt: now,
+        verifiedAt: now,
+        verifiedByUserId: input.actorUserId,
+      } as any)
+      .where(eq(payments.id, pay.id));
     await tx.update(orders).set({ paymentStatus: "PAID", paidAt: now, linkedTransactionId: txId, updatedAt: now } as any).where(eq(orders.id, order.id));
     await tx.insert(orderStatusHistory).values({ orderId: order.id, fromOrderStatus: order.orderStatus, toOrderStatus: order.orderStatus, fromPaymentStatus: order.paymentStatus, toPaymentStatus: "PAID", changedByUserId: input.actorUserId, changedByRole: "staff", reason: "Manual transfer verified; financial records + stock deducted", createdAt: now } as any);
     return { ok: true, action: "APPROVED", transactionId: txId };
@@ -114,7 +141,7 @@ export async function expireReservations() {
       const [inv] = await tx.select().from(inventory).where(and(eq(inventory.productId, cur.productId), eq(inventory.storeId, defaultStoreId))).limit(1).for("update");
       if (inv) await tx.update(inventory).set({ reservedQuantity: Math.max(0, (inv.reservedQuantity ?? 0) - cur.quantity), updatedAt: now }).where(eq(inventory.id, inv.id));
       await tx.update(orders).set({ paymentStatus: sql`case when ${orders.paymentStatus} in ('PENDING','UNPAID') then 'EXPIRED' else ${orders.paymentStatus} end`, updatedAt: now } as any).where(eq(orders.id, cur.orderId));
-      await tx.update(payments).set({ status: sql`case when ${payments.status} in ('PENDING','pending','AWAITING_VERIFICATION') then 'EXPIRED' else ${payments.status} end` } as any).where(eq(payments.orderId, cur.orderId));
+      await tx.update(payments).set({ status: sql`case when ${payments.status} in ('PENDING','pending','AWAITING_VERIFICATION','PENDING_VERIFICATION','WAITING_PROOF') then 'EXPIRED' else ${payments.status} end` } as any).where(eq(payments.orderId, cur.orderId));
       released++;
     });
   }

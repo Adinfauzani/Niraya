@@ -172,9 +172,8 @@ export function StorefrontCheckout() {
       if (!orderId) {
         throw new Error("Pesanan dibuat tetapi ID pesanan tidak diterima. Silakan cek status pesanan.");
       }
-      toast.success("Pesanan dibuat", { description: "Lanjut ke pembayaran." });
-      const paymentId = (result as any)?.paymentId ? `?paymentId=${encodeURIComponent((result as any).paymentId)}` : "";
-      router.replace(`/menu/order/${encodeURIComponent(String(orderId))}/payment${paymentId}`);
+      toast.success("Pesanan dibuat", { description: "Lanjut ke pembayaran & status pesanan." });
+      router.replace(`/menu/checkout?orderId=${encodeURIComponent(String(orderId))}`);
     } catch (error: any) {
       toast.error("Checkout gagal", {
         description: error?.message || "Silakan coba lagi.",

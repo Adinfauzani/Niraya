@@ -6,10 +6,17 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [0.1.3] - 2026-11-18
 
+### Diubah
+
+- Alur pemesanan storefront disederhanakan: `/menu/checkout` menjadi satu halaman untuk form checkout dan tampilan pesanan (`?orderId=...`) yang menampilkan status, instruksi transfer/QRIS, unggah bukti, dan ringkasan item; setelah pesanan dibuat pengguna diarahkan ke `/menu/checkout?orderId=...`. Route `/menu/order/[id]` dan `/menu/order/[id]/payment` dialihkan ke `/menu/checkout`, dan tautan detail pesanan pengguna diperbarui.
+- Alur kasir `/orders`: pesanan baru dibuka lewat tombol **Detail** untuk verifikasi data/bukti transfer lalu **Terima/Batalkan** di detail; setelah diterima, progres pesanan ditindaklanjuti dari kartu (**Sedang disiapkan** → **Siap diambil/diantar** → **Selesai**).
+
 ### Diperbaiki
 
 - Middleware/proxy: lookup tenant database dibatasi ke rute API yang memerlukan konteks tenant (`/api/business`, `/api/pos`, `/api/staff`, `/api/settings`) dan dibuat fail-open saat lookup tenant/database gagal, sehingga beban koneksi per request berkurang dan route tidak terblokir saat pool penuh.
 - Koneksi database (Vercel/serverless): koneksi idle dilepas lebih cepat (`idle_timeout`/`max_lifetime`) untuk mengurangi kehabisan slot Supabase session pooler (`EMAXCONNSESSION`) yang dapat menghambat login/akses dashboard.
+- Unggah bukti pembayaran publik: pemeriksaan origin pada permintaan cookie-auth dibuat lebih toleran terhadap header proxy (`Host`/`X-Forwarded-Host`/`Sec-Fetch-Site`) dengan pesan error 403 yang lebih spesifik.
+- Pengiriman bukti pembayaran manual: status dan kolom pembaruan disesuaikan dengan skema database (`PENDING_VERIFICATION`, tanpa `ProofChecksum`/`RejectionReason`, catatan penolakan melalui `VerificationNote`) sehingga unggah bukti tidak gagal pada constraint/kolom yang tidak tersedia.
 
 ## [0.1.2] - 2026-11-18
 

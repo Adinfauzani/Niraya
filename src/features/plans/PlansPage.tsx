@@ -352,8 +352,6 @@ export function PlansPage() {
           </p>
         </div>
       </footer>
-
-      <PublicNavigation variant="mobile" />
     </div>
   )
 }

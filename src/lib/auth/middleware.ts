@@ -204,6 +204,8 @@ export async function updateSession(request: NextRequest) {
   // Halaman dashboard (di dalam route group `(dashboard)`) yang hanya boleh
   // diakses oleh role operasional (bukan `user`). Semua path ini diperlakukan
   // sama seperti `/dashboard` untuk redirect login & role.
+  // Catatan: `/orders/me` adalah aktivitas milik pengguna (bukan halaman staf),
+  // jadi dikecualikan dari pembatasan role dashboard.
   const dashboardPagePaths = [
     "/dashboard",
     "/products",
@@ -222,10 +224,13 @@ export async function updateSession(request: NextRequest) {
   const matchesPrefix = (pathname: string, prefix: string) =>
     pathname === prefix || pathname.startsWith(prefix + "/");
 
+  const isOrdersMe = matchesPrefix(request.nextUrl.pathname, "/orders/me");
+
   // Protected routes - redirect to login if no user
   const protectedPaths = [
     ...dashboardPagePaths,
     "/onboarding",
+    "/home",
     "/api/business",
     "/api/pos",
     "/api/staff",
@@ -248,24 +253,30 @@ export async function updateSession(request: NextRequest) {
     response.headers.set("x-tenant-store-id", tenant.storeId);
   }
 
-  // Root path - redirect authenticated users to dashboard
-  if (request.nextUrl.pathname === "/" && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  // Auth routes - redirect to dashboard if already logged in
   const authPaths = ["/login", "/signup", "/register", "/forgot-password", "/reset-password", "/auth/callback"];
   const isAuthPage = authPaths.some((path) =>
     matchesPrefix(request.nextUrl.pathname, path)
   );
 
-  if (isAuthPage && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // Guest pada landing dialihkan ke direktori toko.
+  if (!user && request.nextUrl.pathname === "/") {
+    return NextResponse.redirect(new URL("/search", request.url));
+  }
+
+  // Pengguna login tidak boleh ke landing (/); arahkan ke profil.
+  if (user && request.nextUrl.pathname === "/") {
+    return NextResponse.redirect(new URL("/profile", request.url));
+  }
+
+  // Login/signup/auth pages: redirect logged-in users to profile.
+  if (user && isAuthPage) {
+    return NextResponse.redirect(new URL("/profile", request.url));
   }
 
   // Role `user` (akun dasar tanpa bisnis) tidak boleh masuk halaman dashboard —
   // arahkan ke halaman profil, kecuali saat masih dalam alur onboarding.
-  if (user?.id) {
+  // `/orders/me` dikecualikan agar pengguna dapat melihat aktivitas pesanan sendiri.
+  if (user?.id && !isOrdersMe) {
     const isDashboardPage = dashboardPagePaths.some((path) =>
       matchesPrefix(request.nextUrl.pathname, path)
     );

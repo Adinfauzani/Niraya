@@ -49,3 +49,6 @@ drizzle/meta
 # docs/agent (local)
 AGENTS.md
 /docs/
+
+# local runtime data
+.data/

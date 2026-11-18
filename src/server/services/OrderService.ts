@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { orderItems, orders, orderStatusHistory } from "@/server/db/schema";
+import { orderItems, orders, orderStatusHistory, payments } from "@/server/db/schema";
 import type {
   Order,
   OrderCounts,
@@ -254,4 +254,117 @@ export async function updateOrderStatus(options: {
   });
 
   return { ok: true };
+}
+
+export type OrderPaymentDetail = {
+  id: string;
+  status: string;
+  method: string;
+  amount: number;
+  proofSubmittedAt: string | null;
+  referenceNumber: string | null;
+  verifiedAt: string | null;
+  verificationNote: string | null;
+  hasProof: boolean;
+  expiresAt: string | null;
+  currency: string;
+};
+
+export async function getOrderDetail(options: {
+  businessId: string;
+  storeId: string;
+  orderId: string;
+}): Promise<(Order & { payments: OrderPaymentDetail[] }) | null> {
+  const { businessId, storeId, orderId } = options;
+
+  const [row] = await db
+    .select()
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.businessId, businessId),
+        eq(orders.storeId, storeId)
+      )
+    )
+    .limit(1);
+
+  if (!row) return null;
+
+  const [items, payRows] = await Promise.all([
+    db.select().from(orderItems).where(eq(orderItems.orderId, row.id)),
+    db
+      .select({
+        id: payments.id,
+        status: payments.status,
+        method: payments.paymentMethod,
+        amount: payments.amount,
+        currency: payments.currency,
+        proofUrl: payments.proofUrl,
+        proofSubmittedAt: payments.proofSubmittedAt,
+        referenceNumber: payments.referenceNumber,
+        verifiedAt: payments.verifiedAt,
+        verificationNote: payments.verificationNote,
+        expiresAt: payments.expiresAt,
+      })
+      .from(payments)
+      .where(eq(payments.orderId, row.id))
+      .orderBy(desc(payments.createdAt)),
+  ]);
+
+  const mappedItems: OrderItem[] = items.map((item) => ({
+    id: item.id,
+    productId: item.productId,
+    productName: item.productName,
+    sku: item.sku,
+    variantName: item.variantName,
+    quantity: item.quantity,
+    unitPrice: money(item.unitPrice),
+    discountTotal: money(item.discountTotal),
+    taxTotal: money(item.taxTotal),
+    subtotal: money(item.subtotal),
+    notes: item.notes,
+  }));
+
+  const mappedPayments: OrderPaymentDetail[] = payRows.map((p) => ({
+    id: p.id,
+    status: String(p.status ?? ""),
+    method: String(p.method ?? ""),
+    amount: money(p.amount),
+    currency: String(p.currency ?? row.currency ?? "IDR"),
+    proofSubmittedAt: p.proofSubmittedAt ? iso(p.proofSubmittedAt) : null,
+    referenceNumber: p.referenceNumber ?? null,
+    verifiedAt: p.verifiedAt ? iso(p.verifiedAt) : null,
+    verificationNote: p.verificationNote ?? null,
+    hasProof: !!p.proofUrl,
+    expiresAt: p.expiresAt ? iso(p.expiresAt) : null,
+  }));
+
+  return {
+    id: row.id,
+    number: row.orderNumber,
+    source: (ORDER_SOURCES.includes(row.orderSource as OrderSource)
+      ? row.orderSource
+      : "POS") as OrderSource,
+    status: (ORDER_STATUSES.includes(row.orderStatus as OrderStatus)
+      ? row.orderStatus
+      : "SUBMITTED") as OrderStatus,
+    paymentStatus: row.paymentStatus as Order["paymentStatus"],
+    customerName: row.customerName ?? "Pelanggan",
+    customerPhone: row.customerPhone,
+    orderType: row.orderType,
+    tableNumber: row.tableNumber,
+    paymentMethod: row.paymentMethod,
+    currency: row.currency,
+    subtotal: money(row.subtotal),
+    discountTotal: money(row.discountTotal),
+    taxTotal: money(row.taxTotal),
+    grandTotal: money(row.grandTotal),
+    amountPaid: row.amountPaid === null ? null : money(row.amountPaid),
+    notes: row.notes,
+    createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
+    items: mappedItems,
+    payments: mappedPayments,
+  };
 }

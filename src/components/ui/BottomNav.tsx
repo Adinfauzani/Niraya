@@ -1,12 +1,13 @@
 "use client"
 
+import { useSyncExternalStore } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, LayoutDashboard, LogIn, User } from "lucide-react"
-import { useSyncExternalStore } from "react"
+import { ClipboardList, Home, Search, User } from "lucide-react"
 
 import {
   BottomNavigation,
+  BottomNavigationAccessory,
   BottomNavigationHighlight,
   BottomNavigationHighlightItem,
   BottomNavigationItem,
@@ -33,19 +34,20 @@ const HIDE_PREFIXES = [
   "/suppliers",
   "/purchases",
   "/transactions",
+  // Staf /orders (bukan /orders/me) memakai layout dashboard.
   "/orders",
   "/onboarding",
-  "/profile",
   "/login",
   "/register",
   "/signup",
   "/forgot-password",
   "/reset-password",
   "/auth",
-  "/menu",
 ] as const;
 
 function isHiddenPath(pathname: string): boolean {
+  // /orders/me adalah aktivitas pengguna (punya nav ini); /orders lainnya dashboard.
+  if (pathname === "/orders/me" || pathname.startsWith("/orders/me/")) return false;
   if (
     HIDE_PREFIXES.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -53,6 +55,8 @@ function isHiddenPath(pathname: string): boolean {
   ) {
     return true;
   }
+  // Checkout & store menu flows have their own bottom CTAs; keep floating nav off them.
+  if (pathname === "/menu/checkout" || pathname.startsWith("/menu/checkout/")) return true;
   const segs = pathname.split("/").filter(Boolean);
   // /{storeSlug}/menu (public storefront menu)
   if (segs.length >= 2 && segs[1] === "menu") return true;
@@ -60,13 +64,20 @@ function isHiddenPath(pathname: string): boolean {
 }
 
 function getActiveValue(pathname: string): string {
-  if (pathname === "/" || pathname.startsWith("/#")) return "home";
-  if (pathname === "/plans" || pathname.startsWith("/plans/")) return "plans";
-  return "account";
+  if (pathname === "/home" || pathname.startsWith("/home/")) return "home";
+  if (pathname === "/search" || pathname.startsWith("/search/")) return "search";
+  if (pathname === "/orders/me" || pathname.startsWith("/orders/me/")) return "activity";
+  return "none";
 }
 
 const itemClassName =
   "flex h-[3.875rem] w-[4.875rem] flex-col items-center justify-center pt-[5px] data-[minimized]:size-12 data-[minimized]:pt-0";
+
+const ITEMS = [
+  { value: "home", label: "Beranda", href: "/home", Icon: Home },
+  { value: "search", label: "Cari", href: "/search", Icon: Search },
+  { value: "activity", label: "Aktivitas", href: "/orders/me", Icon: ClipboardList },
+] as const;
 
 const DESKTOP_QUERY = "(min-width: 64rem)";
 
@@ -86,72 +97,54 @@ function getServerSnapshot() {
 
 export function BottomNav() {
   const pathname = usePathname()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const isDesktop = useSyncExternalStore(
     subscribeDesktop,
     getDesktopSnapshot,
     getServerSnapshot,
   )
 
-  if (isDesktop || isHiddenPath(pathname)) return null;
+  if (isDesktop || isHiddenPath(pathname) || loading || !user) return null;
+
+  const activeValue = getActiveValue(pathname);
 
   return (
     <>
       {/* Spacer agar konten tidak tertutup bottom bar yang fixed. */}
       <div className="h-20" aria-hidden="true" />
       <BottomNavigation
-        value={getActiveValue(pathname)}
+        value={activeValue === "none" ? undefined : activeValue}
         scrollBehavior="minimize"
         aria-label="Navigasi utama"
         className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit items-center gap-2.5"
       >
         <BottomNavigationHighlight className="absolute inset-x-0 inset-y-1 rounded-full bg-muted">
-          <ul className="flex rounded-full bg-background px-1 ring-1 ring-border">
-            <li>
-              <BottomNavigationHighlightItem value="home">
-                <BottomNavigationItem value="home" asChild>
-                  <Link href="/" className={itemClassName}>
-                    <Home className="size-5" aria-hidden="true" />
-                    <BottomNavigationLabel className="pt-[5px] text-xs">
-                      Beranda
-                    </BottomNavigationLabel>
-                  </Link>
-                </BottomNavigationItem>
-              </BottomNavigationHighlightItem>
-            </li>
-            <li>
-              <BottomNavigationHighlightItem value="plans">
-                <BottomNavigationItem value="plans" asChild>
-                  <Link href="/plans" className={itemClassName}>
-                    <LayoutDashboard className="size-5" aria-hidden="true" />
-                    <BottomNavigationLabel className="pt-[5px] text-xs">
-                      Plans
-                    </BottomNavigationLabel>
-                  </Link>
-                </BottomNavigationItem>
-              </BottomNavigationHighlightItem>
-            </li>
-            <li>
-              <BottomNavigationHighlightItem value="account">
-                <BottomNavigationItem value="account" asChild>
-                  <Link
-                    href={user ? "/profile" : "/login"}
-                    className={itemClassName}
-                  >
-                    {user ? (
-                      <User className="size-5" aria-hidden="true" />
-                    ) : (
-                      <LogIn className="size-5" aria-hidden="true" />
-                    )}
-                    <BottomNavigationLabel className="pt-[5px] text-xs">
-                      {user ? "Profil" : "Masuk"}
-                    </BottomNavigationLabel>
-                  </Link>
-                </BottomNavigationItem>
-              </BottomNavigationHighlightItem>
-            </li>
+          <ul className="flex items-center rounded-full bg-background px-1 ring-1 ring-border">
+            {ITEMS.map(({ value, label, href, Icon }) => (
+              <li key={value}>
+                <BottomNavigationHighlightItem value={value}>
+                  <BottomNavigationItem value={value} asChild>
+                    <Link href={href} aria-label={label} className={itemClassName}>
+                      <Icon className="size-5" aria-hidden="true" />
+                      <BottomNavigationLabel className="pt-[5px] text-xs">
+                        {label}
+                      </BottomNavigationLabel>
+                    </Link>
+                  </BottomNavigationItem>
+                </BottomNavigationHighlightItem>
+              </li>
+            ))}
           </ul>
         </BottomNavigationHighlight>
+        <BottomNavigationAccessory className="size-[3.875rem] rounded-full bg-background p-1 shadow-lg ring-1 ring-border data-[minimized]:size-12">
+          <Link
+            href="/profile"
+            aria-label="Profil"
+            className="flex size-full items-center justify-center rounded-full text-muted-foreground outline-none transition-colors duration-300 ease-out hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <User className="size-5" aria-hidden="true" />
+          </Link>
+        </BottomNavigationAccessory>
       </BottomNavigation>
     </>
   );
