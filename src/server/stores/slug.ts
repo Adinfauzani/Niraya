@@ -24,49 +24,57 @@ export async function resolveStoreBySlug(slug: string): Promise<ResolvedStore | 
 
   const slugExpr = sql`trim(both '-' from regexp_replace(lower(${stores.name}), '[^a-z0-9]+', '-', 'g'))`;
 
-  const [row] = await db
-    .select({
-      id: stores.id,
-      name: stores.name,
-      businessId: stores.businessId,
-      businessName: businesses.name,
-    })
-    .from(stores)
-    .innerJoin(businesses, eq(businesses.id, stores.businessId))
-    .where(
-      and(
-        eq(stores.isActive, true),
-        isNull(stores.deletedAt),
-        eq(businesses.status, "active"),
-        sql`${slugExpr} = ${normalized}`,
-      ),
-    )
-    .orderBy(stores.id)
-    .limit(1);
+  try {
+    const [row] = await db
+      .select({
+        id: stores.id,
+        name: stores.name,
+        businessId: stores.businessId,
+        businessName: businesses.name,
+      })
+      .from(stores)
+      .innerJoin(businesses, eq(businesses.id, stores.businessId))
+      .where(
+        and(
+          eq(stores.isActive, true),
+          isNull(stores.deletedAt),
+          eq(businesses.status, "active"),
+          sql`${slugExpr} = ${normalized}`,
+        ),
+      )
+      .orderBy(stores.id)
+      .limit(1);
 
-  return row ?? null;
+    return row ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Resolve an active store by its id (validated against active business). */
 export async function resolveStoreById(id: string): Promise<ResolvedStore | null> {
-  const [row] = await db
-    .select({
-      id: stores.id,
-      name: stores.name,
-      businessId: stores.businessId,
-      businessName: businesses.name,
-    })
-    .from(stores)
-    .innerJoin(businesses, eq(businesses.id, stores.businessId))
-    .where(
-      and(
-        eq(stores.id, id),
-        eq(stores.isActive, true),
-        isNull(stores.deletedAt),
-        eq(businesses.status, "active"),
-      ),
-    )
-    .limit(1);
+  try {
+    const [row] = await db
+      .select({
+        id: stores.id,
+        name: stores.name,
+        businessId: stores.businessId,
+        businessName: businesses.name,
+      })
+      .from(stores)
+      .innerJoin(businesses, eq(businesses.id, stores.businessId))
+      .where(
+        and(
+          eq(stores.id, id),
+          eq(stores.isActive, true),
+          isNull(stores.deletedAt),
+          eq(businesses.status, "active"),
+        ),
+      )
+      .limit(1);
 
-  return row ?? null;
+    return row ?? null;
+  } catch {
+    return null;
+  }
 }

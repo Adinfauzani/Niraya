@@ -183,72 +183,92 @@ export async function getHomeDiscoveryData(): Promise<HomeDiscoveryData> {
         ),
       )
       .orderBy(desc(stores.createdAt))
-      .limit(80);
+      .limit(40);
 
     if (!storeRows.length) return EMPTY;
 
     const storeIds = storeRows.map((s) => s.id);
     const businessIds = [...new Set(storeRows.map((s) => s.businessId))];
 
+    const q = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+
     const [profileRows, categoryRows, lookupCategoryRows, productRows, posSales, sfSales, promoRows] = await Promise.all([
-      db
-        .select({
-          id: businessProfile.id,
-          businessId: businessProfile.businessId,
-          businessName: businessProfile.businessName,
-          logoUrl: businessProfile.logoUrl,
-          address: businessProfile.address,
-          description: businessProfile.description,
-          phone: businessProfile.phone,
-        })
-        .from(businessProfile)
-        .where(inArray(businessProfile.businessId, businessIds)),
-      db
-        .select({ id: categories.id, name: categories.name, businessId: categories.businessId })
-        .from(categories)
-        .where(and(inArray(categories.businessId, businessIds), eq(categories.status, "active"), isNull(categories.deletedAt))),
-      db.select({ code: businessCategories.code, name: businessCategories.name }).from(businessCategories).where(eq(businessCategories.isActive, true)),
-      db
-        .select({
-          id: products.id,
-          name: products.name,
-          imageUrl: products.imageUrl,
-          sellingPrice: products.sellingPrice,
-          stockQuantity: products.stockQuantity,
-          isStockTracked: products.isStockTracked,
-          businessId: products.businessId,
-          categoryId: products.categoryId,
-          createdAt: products.createdAt,
-        })
-        .from(products)
-        .where(and(inArray(products.businessId, businessIds), eq(products.status, "active"), isNull(products.deletedAt)))
-        .orderBy(desc(products.createdAt))
-        .limit(500),
-      db
-        .select({
-          storeId: transactions.storeId,
-          productId: transactionItems.productId,
-          qty: sql<number>`sum(${transactionItems.quantity})::int`,
-        })
-        .from(transactionItems)
-        .innerJoin(transactions, eq(transactions.id, transactionItems.transactionId))
-        .where(and(inArray(transactions.storeId, storeIds), eq(transactions.status, "completed")))
-        .groupBy(transactions.storeId, transactionItems.productId),
-      db
-        .select({
-          storeId: orders.storeId,
-          productId: orderItems.productId,
-          qty: sql<number>`sum(${orderItems.quantity})::int`,
-        })
-        .from(orderItems)
-        .innerJoin(orders, eq(orders.id, orderItems.orderId))
-        .where(and(inArray(orders.storeId, storeIds), eq(orders.orderStatus, "COMPLETED")))
-        .groupBy(orders.storeId, orderItems.productId),
-      db
-        .select({ businessId: discounts.businessId, id: discounts.id })
-        .from(discounts)
-        .where(and(inArray(discounts.businessId, businessIds), eq(discounts.isActive, true)))
-        .limit(200),
+      q(
+        db
+          .select({
+            id: businessProfile.id,
+            businessId: businessProfile.businessId,
+            businessName: businessProfile.businessName,
+            logoUrl: businessProfile.logoUrl,
+            address: businessProfile.address,
+            description: businessProfile.description,
+            phone: businessProfile.phone,
+          })
+          .from(businessProfile)
+          .where(inArray(businessProfile.businessId, businessIds)),
+        [] as any[],
+      ),
+      q(
+        db
+          .select({ id: categories.id, name: categories.name, businessId: categories.businessId })
+          .from(categories)
+          .where(and(inArray(categories.businessId, businessIds), eq(categories.status, "active"), isNull(categories.deletedAt))),
+        [] as any[],
+      ),
+      q(db.select({ code: businessCategories.code, name: businessCategories.name }).from(businessCategories).where(eq(businessCategories.isActive, true)), [] as any[]),
+      q(
+        db
+          .select({
+            id: products.id,
+            name: products.name,
+            imageUrl: products.imageUrl,
+            sellingPrice: products.sellingPrice,
+            stockQuantity: products.stockQuantity,
+            isStockTracked: products.isStockTracked,
+            businessId: products.businessId,
+            categoryId: products.categoryId,
+            createdAt: products.createdAt,
+          })
+          .from(products)
+          .where(and(inArray(products.businessId, businessIds), eq(products.status, "active"), isNull(products.deletedAt)))
+          .orderBy(desc(products.createdAt))
+          .limit(200),
+        [] as any[],
+      ),
+      q(
+        db
+          .select({
+            storeId: transactions.storeId,
+            productId: transactionItems.productId,
+            qty: sql<number>`sum(${transactionItems.quantity})::int`,
+          })
+          .from(transactionItems)
+          .innerJoin(transactions, eq(transactions.id, transactionItems.transactionId))
+          .where(and(inArray(transactions.storeId, storeIds), eq(transactions.status, "completed")))
+          .groupBy(transactions.storeId, transactionItems.productId),
+        [] as any[],
+      ),
+      q(
+        db
+          .select({
+            storeId: orders.storeId,
+            productId: orderItems.productId,
+            qty: sql<number>`sum(${orderItems.quantity})::int`,
+          })
+          .from(orderItems)
+          .innerJoin(orders, eq(orders.id, orderItems.orderId))
+          .where(and(inArray(orders.storeId, storeIds), eq(orders.orderStatus, "COMPLETED")))
+          .groupBy(orders.storeId, orderItems.productId),
+        [] as any[],
+      ),
+      q(
+        db
+          .select({ businessId: discounts.businessId, id: discounts.id })
+          .from(discounts)
+          .where(and(inArray(discounts.businessId, businessIds), eq(discounts.isActive, true)))
+          .limit(120),
+        [] as any[],
+      ),
     ]);
 
     const profileByBusiness = new Map(profileRows.map((p) => [p.businessId, p]));

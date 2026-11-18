@@ -130,7 +130,8 @@ async function signedS3Request(
   const signedHeaderKeys = Object.keys(headers).sort();
   const canonicalHeaders = signedHeaderKeys.map((k) => `${k}:${String(headers[k]).trim().replace(/\s+/g, " ")}\n`).join("");
   const signedHeaders = signedHeaderKeys.join(";");
-  const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, payloadHash].join("\n");
+  // CanonicalHeaders already ends with \n; do not insert an extra blank line before SignedHeaders.
+  const canonicalRequest = `${method}\n${canonicalUri}\n${canonicalQuery}\n${canonicalHeaders}${signedHeaders}\n${payloadHash}`;
 
   const algorithm = "AWS4-HMAC-SHA256";
   const credentialScope = `${dateStamp}/${cfg.region}/s3/aws4_request`;

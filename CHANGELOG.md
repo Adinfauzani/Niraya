@@ -4,6 +4,17 @@ Semua perubahan penting pada Niraya POS dicatat di berkas ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/)
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.1.3.1a] - 2026-11-18
+
+### Ditambahkan
+
+- Logging sisi server pada `POST /api/public/payments/proof` untuk mencatat status, pesan, detail respons storage, dan konfigurasi yang hilang saat unggah/penyimpanan bukti pembayaran gagal (membantu diagnosis error object storage/S3).
+
+### Diperbaiki
+
+- Penyimpanan bukti pembayaran (S3-compatible, SigV4): perbaikan pembentukan canonical request sehingga signature valid dan upload tidak ditolak object storage.
+- Mitigasi fail-soft saat pool koneksi database penuh (`EMAXCONNSESSION`): resolusi slug dan direktori toko serta agregasi discovery menangani kegagalan query (fallback kosong/terkontrol), batas query discovery diturunkan, dan halaman `/{storeSlug}/menu` menampilkan fallback sementara alih-alih crash saat pemuatan toko gagal.
+
 ## [0.1.3] - 2026-11-18
 
 ### Ditambahkan

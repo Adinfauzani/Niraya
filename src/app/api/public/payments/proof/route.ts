@@ -76,6 +76,15 @@ export async function POST(request: Request) {
     await submitPaymentProof({ orderId: parsed.data.orderId, paymentId: parsed.data.paymentId, proofUrl: stored.key, referenceNumber: parsed.data.referenceNumber });
     return NextResponse.json({ ok: true, paymentStatus: "AWAITING_VERIFICATION", submittedAt: new Date().toISOString() });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Upload gagal." }, { status: e?.status ?? 400 });
+    const status = e?.status ?? 400;
+    if (status >= 500 || e?.detail || e?.missing) {
+      console.error("[public/payments/proof] upload failed", {
+        status,
+        message: e?.message,
+        detail: e?.detail,
+        missing: e?.missing,
+      });
+    }
+    return NextResponse.json({ error: e?.message || "Upload gagal." }, { status });
   }
 }
