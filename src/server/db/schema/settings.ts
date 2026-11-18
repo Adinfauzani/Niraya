@@ -54,6 +54,7 @@ export const businessSettings = s.table(
     manualTransferAccountName: text("ManualTransferAccountName"),
     manualTransferAccountNumber: text("ManualTransferAccountNumber"),
     manualTransferInstructions: text("ManualTransferInstructions"),
+    manualTransferQrisImageUrl: text("ManualTransferQrisImageUrl"),
     reservationExpiryMinutes: integer("ReservationExpiryMinutes")
       .notNull()
       .default(30),
@@ -378,6 +379,7 @@ export const paymentSettings = s.table(
     manualTransferAccountName: text("ManualTransferAccountName"),
     manualTransferAccountNumber: text("ManualTransferAccountNumber"),
     manualTransferInstructions: text("ManualTransferInstructions"),
+    manualTransferQrisImageUrl: text("ManualTransferQrisImageUrl"),
     acceptCash: boolean("AcceptCash").notNull().default(true),
     acceptCard: boolean("AcceptCard").notNull().default(false),
     acceptQris: boolean("AcceptQris").notNull().default(false),

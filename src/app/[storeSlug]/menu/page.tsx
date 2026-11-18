@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { StoreIcon } from "lucide-react";
 
-import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { StorefrontMenu } from "@/features/storefront/StorefrontMenu";
@@ -20,39 +19,33 @@ export default async function StoreMenuPage({
 
   if (!store) {
     return (
-      <>
-        <div className="flex min-h-svh items-center justify-center bg-background px-6 pb-[calc(env(safe-area-inset-bottom)+6rem)]">
-          <EmptyState
-            icon={StoreIcon}
-            title="Toko tidak ditemukan"
-            description="Tautan toko tidak valid atau sudah tidak tersedia."
-            action={
-              <Button asChild variant="outline" className="rounded-xl">
-                <Link href="/search">Cari toko</Link>
-              </Button>
-            }
-            className="max-w-md border-border/60 bg-card/50"
-          />
-        </div>
-        <PublicNavigation variant="mobile" />
-      </>
+      <div className="flex min-h-svh items-center justify-center bg-background px-6 pb-6">
+        <EmptyState
+          icon={StoreIcon}
+          title="Toko tidak ditemukan"
+          description="Tautan toko tidak valid atau sudah tidak tersedia."
+          action={
+            <Button asChild variant="outline" className="rounded-xl">
+              <Link href="/search">Cari toko</Link>
+            </Button>
+          }
+          className="max-w-md border-border/60 bg-card/50"
+        />
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="lg:pt-[57px]">
-        <Suspense
-          fallback={
-            <div className="p-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] text-sm text-muted-foreground">
-              Memuat menu...
-            </div>
-          }
-        >
-          <StorefrontMenu storeId={store.id} />
-        </Suspense>
-      </div>
-      <PublicNavigation variant="mobile" />
-    </>
+    <div className="lg:pt-[57px]">
+      <Suspense
+        fallback={
+          <div className="p-6 pb-6 text-sm text-muted-foreground">
+            Memuat menu...
+          </div>
+        }
+      >
+        <StorefrontMenu storeId={store.id} />
+      </Suspense>
+    </div>
   );
 }

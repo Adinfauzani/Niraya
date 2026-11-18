@@ -1,5 +1,7 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
+
+type DbExecutor = any;
 import { subscriptions, plans } from "@/server/db/schema/platform";
 import { businessMembers, userProfiles } from "@/server/db/schema/core";
 import { stores } from "@/server/db/schema/core";
@@ -26,8 +28,11 @@ function entitlementsForPlan(plan: string): PlanEntitlements | null {
 }
 
 /** Plan efektif pemilik bisnis; dipakai saat belum ada langganan aktif. */
-async function getOwnerPlan(businessId: string): Promise<string> {
-  const [owner] = await db
+async function getOwnerPlan(
+  businessId: string,
+  executor: DbExecutor = db
+): Promise<string> {
+  const [owner] = await executor
     .select({ userId: businessMembers.userId })
     .from(businessMembers)
     .where(
@@ -41,7 +46,7 @@ async function getOwnerPlan(businessId: string): Promise<string> {
 
   if (!owner?.userId) return "free";
 
-  const [profile] = await db
+  const [profile] = await executor
     .select({ plan: userProfiles.plan })
     .from(userProfiles)
     .where(eq(userProfiles.id, owner.userId))
@@ -50,8 +55,11 @@ async function getOwnerPlan(businessId: string): Promise<string> {
   return profile?.plan ?? "free";
 }
 
-async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitlements | null> {
-  const subscription = await db.query.subscriptions.findFirst({
+async function getActivePlanEntitlements(
+  businessId: string,
+  executor: DbExecutor = db
+): Promise<PlanEntitlements | null> {
+  const subscription = await executor.query.subscriptions.findFirst({
     where: and(
       eq(subscriptions.businessId, businessId),
       inArray(subscriptions.status, ["active", "cancel_at_period_end"])
@@ -61,7 +69,7 @@ async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitl
   if (!subscription) {
     // Fallback ke plan pemilik bisnis (free/starter/plus/pro), lalu free tier.
     return (
-      entitlementsForPlan(await getOwnerPlan(businessId)) ??       {
+      entitlementsForPlan(await getOwnerPlan(businessId, executor)) ?? {
         maxUsers: 3,
         maxStores: 1,
         maxProducts: 50,
@@ -70,7 +78,7 @@ async function getActivePlanEntitlements(businessId: string): Promise<PlanEntitl
     );
   }
 
-  const plan = await db.query.plans.findFirst({
+  const plan = await executor.query.plans.findFirst({
     where: eq(plans.id, subscription.planId),
   });
 
@@ -130,15 +138,18 @@ export async function checkStoreLimit(businessId: string): Promise<EntitlementCh
   };
 }
 
-export async function checkProductLimit(businessId: string): Promise<EntitlementCheckResult> {
-  const entitlements = await getActivePlanEntitlements(businessId);
+export async function checkProductLimit(
+  businessId: string,
+  executor: DbExecutor = db
+): Promise<EntitlementCheckResult> {
+  const entitlements = await getActivePlanEntitlements(businessId, executor);
   const maxProducts = entitlements?.maxProducts ?? null;
 
   if (maxProducts === null || maxProducts === undefined) {
     return { allowed: true, currentCount: 0, limit: null };
   }
 
-  const businessProducts = await db.query.products.findMany({
+  const businessProducts = await executor.query.products.findMany({
     where: and(eq(products.businessId, businessId), eq(products.status, "active")),
     columns: { id: true },
   });
@@ -149,8 +160,25 @@ export async function checkProductLimit(businessId: string): Promise<Entitlement
     allowed: currentCount < maxProducts,
     currentCount,
     limit: maxProducts,
-    message: currentCount >= maxProducts ? `Batas produk tercapai (${maxProducts}). Upgrade paket untuk menambah produk.` : undefined,
+    message:
+      currentCount >= maxProducts
+        ? `Batas produk tercapai (${maxProducts}). Upgrade paket untuk menambah produk.`
+        : undefined,
   };
+}
+
+export async function assertProductLimitInTx(
+  tx: DbExecutor,
+  businessId: string
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`product-limit:${businessId}`}))`
+  );
+  const check = await checkProductLimit(businessId, tx);
+  enforceEntitlement(
+    check,
+    "Batas produk tercapai. Upgrade paket untuk menambah produk."
+  );
 }
 
 export async function checkFeatureAccess(businessId: string, feature: string): Promise<{

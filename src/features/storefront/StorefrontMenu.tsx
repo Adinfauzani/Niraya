@@ -35,7 +35,7 @@ import {
 import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { useIsMobile } from "@/hooks/useMobile";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Drawer,
   DrawerContent,
@@ -340,7 +340,7 @@ export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | nu
     prevCount.current = count;
   }, [count]);
 
-  const canCheckout = !!data?.catalog.payment.storefrontCheckoutEnabled;
+  const canCheckout = data?.catalog.payment.storefrontCheckoutEnabled !== false;
   const biz = data?.catalog.business;
   const storeName = data?.catalog.store?.name?.trim() || null;
   const bizName = biz?.name || "Menu";
@@ -481,9 +481,9 @@ export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | nu
       </main>
 
       {count > 0 ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+5.25rem)] min-[400px]:px-4 sm:px-6 lg:z-30 lg:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="pointer-events-auto mx-auto flex max-w-6xl items-center gap-2 rounded-[22px] border border-border/70 bg-background/92 p-2 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]">
-            <button type="button" onClick={() => setCartOpen(true)} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1.5 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring hover:bg-muted/50", cartPulse && "motion-safe:scale-[0.995]")} aria-label={`Buka keranjang, ${count} item`}>
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] min-[400px]:px-4 sm:px-6 lg:z-30">
+          <div className="pointer-events-auto relative z-10 mx-auto flex max-w-6xl items-center gap-2 rounded-[22px] border border-border/70 bg-background/92 p-2 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]">
+            <button type="button" onClick={() => setCartOpen(true)} className={cn("pointer-events-auto flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1.5 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-ring hover:bg-muted/50", cartPulse && "motion-safe:scale-[0.995]")} aria-label={`Buka keranjang, ${count} item`}>
               <span className="relative flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-white dark:text-black">
                 <ShoppingBagIcon className="size-[18px]" aria-hidden />
                 <span className={cn("absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full bg-background px-1 text-[10px] font-bold tabular-nums text-foreground ring-2 ring-foreground dark:bg-black dark:text-white dark:ring-white", cartPulse && "motion-safe:animate-pulse")} aria-hidden>{count}</span>
@@ -493,9 +493,15 @@ export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | nu
                 <span className="block truncate text-[12px] tabular-nums text-muted-foreground">{formatCurrency(subtotal)} estimasi</span>
               </span>
             </button>
-            <Button className="h-11 shrink-0 rounded-2xl bg-blue-600 px-4 text-white shadow-none hover:bg-blue-500" onClick={() => router.push(checkoutHref)} disabled={!canCheckout}>
-              Checkout <ArrowRightIcon className="size-4" aria-hidden />
-            </Button>
+            {canCheckout ? (
+              <Link href={checkoutHref} className={cn(buttonVariants({ variant: "default" }), "pointer-events-auto h-11 shrink-0 rounded-2xl bg-blue-600 px-4 text-white shadow-none hover:bg-blue-500")}>
+                Checkout <ArrowRightIcon className="size-4" aria-hidden />
+              </Link>
+            ) : (
+              <Button type="button" className="h-11 shrink-0 rounded-2xl bg-blue-600 px-4 text-white shadow-none hover:bg-blue-500" disabled>
+                Checkout <ArrowRightIcon className="size-4" aria-hidden />
+              </Button>
+            )}
           </div>
         </div>
       ) : null}
@@ -552,10 +558,16 @@ export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | nu
               <div><p className="text-[12px] text-muted-foreground">Subtotal estimasi</p><p className="text-lg font-semibold tracking-tight tabular-nums">{formatCurrency(subtotal)}</p></div>
               <p className="max-w-[12rem] text-right text-[11px] leading-4 text-muted-foreground">Pajak & total final dihitung server.</p>
             </div>
-            {!canCheckout ? <p className="text-xs text-muted-foreground">Pemesanan belum diaktifkan.</p> : null}
-            <Button className="h-11 w-full rounded-2xl bg-blue-600 text-white shadow-none hover:bg-blue-500" disabled={!canCheckout} onClick={() => { setCartOpen(false); router.push(checkoutHref); }}>
-              Lanjut ke checkout <ChevronRightIcon className="size-4" aria-hidden />
-            </Button>
+            {data?.catalog.payment.storefrontCheckoutEnabled === false ? <p className="text-xs text-muted-foreground">Pemesanan belum diaktifkan.</p> : null}
+            {canCheckout ? (
+              <Button type="button" className="h-11 w-full rounded-2xl bg-blue-600 text-white shadow-none hover:bg-blue-500" onClick={() => { setCartOpen(false); router.push(checkoutHref); }}>
+                Lanjut ke checkout <ChevronRightIcon className="size-4" aria-hidden />
+              </Button>
+            ) : (
+              <Button type="button" className="h-11 w-full rounded-2xl bg-blue-600 text-white shadow-none hover:bg-blue-500" disabled>
+                Lanjut ke checkout <ChevronRightIcon className="size-4" aria-hidden />
+              </Button>
+            )}
           </div>
         ) : undefined}
       >

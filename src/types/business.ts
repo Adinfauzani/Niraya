@@ -183,6 +183,7 @@ export type BusinessSettings = {
   manualTransferAccountName?: string
   manualTransferAccountNumber?: string
   manualTransferInstructions?: string
+  manualTransferQrisImageUrl?: string | null
   reservationExpiryMinutes?: number
 }
 

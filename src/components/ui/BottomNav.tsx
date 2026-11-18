@@ -16,8 +16,9 @@ import {
 import { useAuth } from "@/hooks/useAuth"
 
 /**
- * Rute di dalam aplikasi (dashboard/POS) dan alur auth. Bottom nav hanya
- * ditampilkan di halaman publik di luar dashboard.
+ * Rute di dalam aplikasi (dashboard/POS), alur auth, dan storefront/checkout.
+ * Bottom nav hanya ditampilkan di halaman publik umum; alur pemesanan/menu
+ * punya CTA bawah sendiri agar tidak tertutup/tidak saling tumpang-tindih.
  */
 const HIDE_PREFIXES = [
   "/dashboard",
@@ -41,12 +42,21 @@ const HIDE_PREFIXES = [
   "/forgot-password",
   "/reset-password",
   "/auth",
+  "/menu",
 ] as const;
 
 function isHiddenPath(pathname: string): boolean {
-  return HIDE_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  if (
+    HIDE_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+  ) {
+    return true;
+  }
+  const segs = pathname.split("/").filter(Boolean);
+  // /{storeSlug}/menu (public storefront menu)
+  if (segs.length >= 2 && segs[1] === "menu") return true;
+  return false;
 }
 
 function getActiveValue(pathname: string): string {

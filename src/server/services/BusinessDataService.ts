@@ -272,7 +272,7 @@ export async function getBusinessData(
         lowStockThreshold: Number(settingsRow.lowStockThreshold ?? settingsRow.LowStockThreshold ?? 0),
         receiptFooter,
         qrOrderingEnabled: !!(settingsRow.qrOrderingEnabled ?? settingsRow.QrOrderingEnabled),
-        qrManualTransferEnabled: !!(settingsRow.qrManualTransferEnabled ?? settingsRow.QrManualTransferEnabled),
+        qrManualTransferEnabled: settingsRow.qrManualTransferEnabled ?? settingsRow.QrManualTransferEnabled ?? true,
         manualTransferBankName: (settingsRow.manualTransferBankName ?? settingsRow.ManualTransferBankName ?? "") as string,
         manualTransferAccountName: (settingsRow.manualTransferAccountName ?? settingsRow.ManualTransferAccountName ?? "") as string,
         manualTransferAccountNumber: (settingsRow.manualTransferAccountNumber ?? settingsRow.ManualTransferAccountNumber ?? "") as string,

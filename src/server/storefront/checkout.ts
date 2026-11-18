@@ -55,15 +55,43 @@ export function hashStorefrontRequest(input: StorefrontCheckoutInput) {
   })).digest("hex");
 }
 
-async function loadCheckoutSettings(tx: any) {
+async function loadCheckoutSettings(tx: any, businessId: string) {
+  // Prefer per-business PaymentSettings, fallback to legacy BusinessSettings.
   try {
-    const rows = await tx.execute(sql`select "QrManualTransferEnabled" as manual, "TaxRate" as tax_rate, "ReservationExpiryMinutes" as expiry, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
+    const rows = await tx.execute(sql`
+      select
+        coalesce(ps."QrManualTransferEnabled", bs."QrManualTransferEnabled", false) as manual,
+        coalesce(os."TaxRate", bs."TaxRate") as tax_rate,
+        coalesce(os."ReservationExpiryMinutes", bs."ReservationExpiryMinutes", 30) as expiry,
+        coalesce(ps."ManualTransferBankName", bs."ManualTransferBankName") as bank,
+        coalesce(ps."ManualTransferAccountName", bs."ManualTransferAccountName") as acc_name,
+        coalesce(ps."ManualTransferAccountNumber", bs."ManualTransferAccountNumber") as acc_no,
+        coalesce(ps."ManualTransferInstructions", bs."ManualTransferInstructions") as instructions,
+        coalesce(ps."ManualTransferQrisImageUrl", bs."ManualTransferQrisImageUrl") as qris_image
+      from "core"."Businesses" b
+      left join "settings"."PaymentSettings" ps on ps."BusinessId" = b."Id"
+      left join "settings"."OperationalSettings" os on os."BusinessId" = b."Id"
+      left join "settings"."BusinessSettings" bs on bs."Id" = 'default'
+      where b."Id" = ${businessId}::uuid
+      limit 1
+    `);
     const r = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
-    if (r) return { manualTransferEnabled: !!r.manual, taxRate: r.tax_rate != null ? Number(r.tax_rate) : null, expiryMinutes: r.expiry != null ? Number(r.expiry) : 30, instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null } };
-  } catch {}
+    if (r) return {
+      manualTransferEnabled: !!r.manual,
+      taxRate: r.tax_rate != null ? Number(r.tax_rate) : null,
+      expiryMinutes: r.expiry != null ? Number(r.expiry) : 30,
+      instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null, qrisImageUrl: r.qris_image ?? null },
+    };
+  } catch {
+    try {
+      const rows = await tx.execute(sql`select "QrManualTransferEnabled" as manual, "TaxRate" as tax_rate, "ReservationExpiryMinutes" as expiry, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions, "ManualTransferQrisImageUrl" as qris_image from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
+      const r = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
+      if (r) return { manualTransferEnabled: !!r.manual, taxRate: r.tax_rate != null ? Number(r.tax_rate) : null, expiryMinutes: r.expiry != null ? Number(r.expiry) : 30, instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null, qrisImageUrl: r.qris_image ?? null } };
+    } catch {}
+  }
   // Default aktif bila setting belum dibuat, agar checkout storefront langsung
   // dapat digunakan. Bisnis dapat menonaktifkannya lewat "Transfer manual".
-  return { manualTransferEnabled: true, taxRate: null, expiryMinutes: 30, instructions: { bankName: null, accountName: null, accountNumber: null, instructions: null } };
+  return { manualTransferEnabled: true, taxRate: null, expiryMinutes: 30, instructions: { bankName: null, accountName: null, accountNumber: null, instructions: null, qrisImageUrl: null } };
 }
 
 /** Direct public storefront checkout. No QR token, no dining table context. DiningTableId always NULL.
@@ -85,9 +113,9 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
       if (existing.requestHash !== requestHash) throw Object.assign(new Error("Idempotency key dipakai dengan payload berbeda."), { status: 409 });
       if (existing.response) return { ...(JSON.parse(existing.response) as any), idempotent: true };
     }
-    const settings = await loadCheckoutSettings(tx);
-    if (!settings.manualTransferEnabled) throw Object.assign(new Error("Pembayaran transfer manual belum diaktifkan."), { status: 403 });
     const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadBusinessAndStore(tx, input.storeId);
+    const settings = await loadCheckoutSettings(tx, defaultBusinessId);
+    if (!settings.manualTransferEnabled) throw Object.assign(new Error("Pembayaran transfer manual belum diaktifkan."), { status: 403 });
 
     const productRows = await tx.select().from(products).where(inArray(products.id, productIds)).orderBy(products.id).for("update");
     const invRows = await tx.select().from(inventory).where(and(eq(inventory.storeId, defaultStoreId), inArray(inventory.productId, productIds))).orderBy(inventory.productId).for("update");

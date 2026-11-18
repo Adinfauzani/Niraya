@@ -39,6 +39,50 @@ function storeInitial(name: string) {
   return (name.trim()[0] || "S").toUpperCase();
 }
 
+function StoreLogo({ src, alt }: { src: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="size-12 shrink-0 rounded-2xl border border-border/60 object-cover"
+      />
+    );
+  }
+  return (
+    <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-gradient-to-br from-muted/50 to-muted/15 text-base font-semibold text-foreground/75">
+      {storeInitial(alt)}
+    </span>
+  );
+}
+
+function PopularProductThumb({ name, imageUrl }: { name: string; imageUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (imageUrl && !failed) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="size-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex size-full items-center justify-center text-muted-foreground">
+      <UtensilsCrossedIcon aria-hidden="true" className="size-4" />
+    </div>
+  );
+}
+
 function StoreDirectoryCard({ store, showStoreName }: { store: StoreDirectoryItem; showStoreName: boolean }) {
   const hasSales = store.popular.some((product) => product.sold > 0);
   const title = showStoreName ? store.name : store.businessName;
@@ -50,17 +94,7 @@ function StoreDirectoryCard({ store, showStoreName }: { store: StoreDirectoryIte
       className="group flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-[0_1px_0_rgba(0,0,0,0.02)] outline-none transition duration-200 hover:border-foreground/15 hover:shadow-[0_10px_28px_-20px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5"
     >
       <div className="flex items-start gap-3">
-        {store.logoUrl ? (
-          <img
-            src={store.logoUrl}
-            alt=""
-            className="size-12 shrink-0 rounded-2xl border border-border/60 object-cover"
-          />
-        ) : (
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-gradient-to-br from-muted/50 to-muted/15 text-base font-semibold text-foreground/75">
-            {storeInitial(title)}
-          </span>
-        )}
+        <StoreLogo src={store.logoUrl} alt={title} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] font-medium leading-5 tracking-tight text-foreground">{title}</span>
           {subtitle ? (
@@ -94,13 +128,7 @@ function StoreDirectoryCard({ store, showStoreName }: { store: StoreDirectoryIte
             {store.popular.map((product) => (
               <div key={product.id} className="min-w-0">
                 <div className="aspect-square overflow-hidden rounded-xl border border-border/60 bg-muted/30">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-muted-foreground">
-                      <UtensilsCrossedIcon aria-hidden="true" className="size-4" />
-                    </div>
-                  )}
+                  <PopularProductThumb name={product.name} imageUrl={product.imageUrl} />
                 </div>
                 <p className="mt-1 truncate text-[11px] leading-4 text-foreground/80">{product.name}</p>
               </div>

@@ -26,7 +26,7 @@ import {
   transactions,
   stores,
 } from "@/server/db/schema";
-import { checkUserLimit, checkStoreLimit, checkProductLimit } from "@/server/entitlements/check";
+import { checkUserLimit, checkStoreLimit, assertProductLimitInTx } from "@/server/entitlements/check";
 
 const money = (value: number) => value.toFixed(2);
 const number = (value: string | null | undefined) => Number(value ?? 0);
@@ -355,7 +355,7 @@ export async function getBusinessData(
         lowStockThreshold: Number(settingsRow.lowStockThreshold ?? settingsRow.LowStockThreshold ?? 0),
         receiptFooter,
         qrOrderingEnabled: !!(settingsRow.qrOrderingEnabled ?? settingsRow.QrOrderingEnabled),
-        qrManualTransferEnabled: !!(settingsRow.qrManualTransferEnabled ?? settingsRow.QrManualTransferEnabled),
+        qrManualTransferEnabled: settingsRow.qrManualTransferEnabled ?? settingsRow.QrManualTransferEnabled ?? true,
         manualTransferBankName: (settingsRow.manualTransferBankName ?? settingsRow.ManualTransferBankName ?? "") as string,
         manualTransferAccountName: (settingsRow.manualTransferAccountName ?? settingsRow.ManualTransferAccountName ?? "") as string,
         manualTransferAccountNumber: (settingsRow.manualTransferAccountNumber ?? settingsRow.ManualTransferAccountNumber ?? "") as string,
@@ -498,16 +498,12 @@ export async function mutateBusiness(
     }
 
     case "product.create": {
-      const productCheck = await checkProductLimit(businessId);
-      if (!productCheck.allowed) {
-        throw new Error(productCheck.message || "Batas produk tercapai. Upgrade paket untuk menambah produk.");
-      }
-
       const id = requiredId(payload.id, "ID produk");
       const stock = Number(payload.stock ?? 0);
       const minStock = Number(payload.minStock ?? 0);
 
       await db.transaction(async (tx) => {
+        await assertProductLimitInTx(tx, businessId);
         await tx.insert(products).values({
           id,
           businessId,

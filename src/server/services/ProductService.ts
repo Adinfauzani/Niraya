@@ -10,7 +10,7 @@ import {
 } from "@/server/db/schema";
 import { ProductRepository } from "@/server/repositories/products";
 import { InventoryRepository } from "@/server/repositories/inventory";
-import { checkProductLimit } from "@/server/entitlements/check";
+import { assertProductLimitInTx } from "@/server/entitlements/check";
 import type { Product } from "@/types/business";
 
 const productRepository = new ProductRepository();
@@ -112,12 +112,8 @@ export async function createProduct(
     status?: string;
   }
 ): Promise<{ ok: true }> {
-  const productCheck = await checkProductLimit(businessId);
-  if (!productCheck.allowed) {
-    throw new Error(productCheck.message || "Batas produk tercapai. Upgrade paket untuk menambah produk.");
-  }
-
   await db.transaction(async (tx) => {
+    await assertProductLimitInTx(tx, businessId);
     await tx.insert(products).values({
       id: data.id,
       businessId,

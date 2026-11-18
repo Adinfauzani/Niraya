@@ -138,9 +138,9 @@ function ProductFormBody({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className="flex flex-col gap-4 px-6 py-4"
+        className="flex flex-col gap-3 px-6 py-4"
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="name"
@@ -243,7 +243,7 @@ function ProductFormBody({
                   <Input
                     type="number"
                     min={0}
-                    step={100}
+                    step={1}
                     inputMode="numeric"
                     value={field.value}
                     onChange={(event) =>
@@ -270,7 +270,7 @@ function ProductFormBody({
                   <Input
                     type="number"
                     min={0}
-                    step={1000}
+                    step={1}
                     inputMode="numeric"
                     value={field.value}
                     onChange={(event) =>
@@ -381,13 +381,29 @@ function ProductFormBody({
                     }}
                   />
                 </FormControl>
-                {field.value ? (
-                  <img
-                    src={field.value}
-                    alt="Preview gambar produk"
-                    className="mt-2 h-24 w-24 rounded-md border object-cover"
-                  />
-                ) : null}
+                <div className="flex items-center gap-3">
+                  {field.value ? (
+                    <img
+                      src={field.value}
+                      alt="Preview gambar produk"
+                      className="h-16 w-16 rounded-md border object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
+                      Gambar
+                    </div>
+                  )}
+                  {field.value ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => field.onChange("")}
+                    >
+                      Hapus
+                    </Button>
+                  ) : null}
+                </div>
                 <FormDescription>
                   Opsional. Unggah dari perangkat; biarkan kosong untuk memakai ikon produk.
                 </FormDescription>

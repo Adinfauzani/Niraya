@@ -1,29 +1,63 @@
 import type { Metadata } from "next";
-import { Fredoka, Outfit, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { BottomNav } from "@/components/ui/BottomNav";
 
-const fredoka = Fredoka({
+const fredoka = localFont({
   variable: "--font-fredoka",
-  subsets: ["latin"],
-  weight: "700",
+  display: "swap",
+  preload: true,
+  fallback: ["Arial"],
+  adjustFontFallback: "Arial",
+  src: [
+    { path: "../fonts/47fe3839ae8538a9-s.1qipnwisndnl7.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/78503821dea84724-s.1u3lwjrw57qjh.woff2", weight: "700", style: "normal" },
+    { path: "../fonts/e35ac209a319490a-s.p.3ryvcbcsz78_7.woff2", weight: "700", style: "normal" },
+  ],
 });
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const plusJakartaSans = localFont({
   variable: "--font-sans",
-  subsets: ["latin"],
+  display: "swap",
+  preload: true,
+  fallback: ["Arial"],
+  adjustFontFallback: "Arial",
+  src: [
+    { path: "../fonts/12d4e8c1f08b4a66-s.0e__wj8580tc5.woff2", weight: "200 800", style: "normal" },
+    { path: "../fonts/cabb10e1d7cbc7c1-s.10u7vx61f1ie7.woff2", weight: "200 800", style: "normal" },
+    { path: "../fonts/9f5a2b9f13a4ecbb-s.35a5cae5tspm2.woff2", weight: "200 800", style: "normal" },
+    { path: "../fonts/d8aeca813a9ab546-s.p.18rizl4rsrl42.woff2", weight: "200 800", style: "normal" },
+  ],
 });
 
-const outfit = Outfit({
+const outfit = localFont({
   variable: "--font-outfit",
-  subsets: ["latin"],
+  display: "swap",
+  preload: true,
+  fallback: ["Arial"],
+  adjustFontFallback: "Arial",
+  src: [
+    { path: "../fonts/8bcddb47c8219945-s.1spbknb88wd48.woff2", weight: "100 900", style: "normal" },
+    { path: "../fonts/c0680f1bdb3a2e90-s.p.1gsd1jahc5dg_.woff2", weight: "100 900", style: "normal" },
+  ],
 });
 
-const jetBrainsMono = JetBrains_Mono({
+const jetBrainsMono = localFont({
   variable: "--font-mono",
-  subsets: ["latin"],
+  display: "swap",
+  preload: true,
+  fallback: ["Arial"],
+  adjustFontFallback: "Arial",
+  src: [
+    { path: "../fonts/258bd0ab5fdd762a-s.2f7nqdagzwx2-.woff2", weight: "100 800", style: "normal" },
+    { path: "../fonts/99a2019bdfa8519b-s.176arc174-8zp.woff2", weight: "100 800", style: "normal" },
+    { path: "../fonts/44e0cb21b0d052b7-s.0bp8oijd_gu96.woff2", weight: "100 800", style: "normal" },
+    { path: "../fonts/f9cd5a77d065db98-s.1fby2rem9ngyr.woff2", weight: "100 800", style: "normal" },
+    { path: "../fonts/954d21e04331b2ae-s.0vfdmo25voy_0.woff2", weight: "100 800", style: "normal" },
+    { path: "../fonts/53897e768d329f66-s.p.3t6q91iet4nsy.woff2", weight: "100 800", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {

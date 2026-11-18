@@ -110,18 +110,60 @@ async function loadStoreContext(storeId?: string | null) {
  *  that store (its business + per-store inventory); otherwise the default
  *  business/first active store is used. Uses server-side DB reads only; no auth,
  *  no staff-only data, no cost/internal stock counts. */
+async function loadPaymentConfig(businessId: string) {
+  const fallback = {
+    manualTransferEnabled: true,
+    instructions: { bankName: null as string | null, accountName: null as string | null, accountNumber: null as string | null, instructions: null as string | null, qrisImageUrl: null as string | null },
+  };
+  try {
+    const rows = await db.execute(sql`
+      select
+        coalesce(ps."QrManualTransferEnabled", bs."QrManualTransferEnabled", true) as manual,
+        coalesce(ps."ManualTransferBankName", bs."ManualTransferBankName") as bank,
+        coalesce(ps."ManualTransferAccountName", bs."ManualTransferAccountName") as acc_name,
+        coalesce(ps."ManualTransferAccountNumber", bs."ManualTransferAccountNumber") as acc_no,
+        coalesce(ps."ManualTransferInstructions", bs."ManualTransferInstructions") as instructions,
+        coalesce(ps."ManualTransferQrisImageUrl", bs."ManualTransferQrisImageUrl") as qris_image
+      from "core"."Businesses" b
+      left join "settings"."PaymentSettings" ps on ps."BusinessId" = b."Id"
+      left join "settings"."BusinessSettings" bs on bs."Id" = 'default'
+      where b."Id" = ${businessId}::uuid
+      limit 1
+    `);
+    const row = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
+    if (row) {
+      return {
+        manualTransferEnabled: !!row.manual,
+        instructions: { bankName: row.bank ?? null, accountName: row.acc_name ?? null, accountNumber: row.acc_no ?? null, instructions: row.instructions ?? null, qrisImageUrl: row.qris_image ?? null },
+      };
+    }
+  } catch {
+    try {
+      const rows = await db.execute(sql`select "QrManualTransferEnabled" as manual, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions, "ManualTransferQrisImageUrl" as qris_image from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
+      const row = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
+      if (row) return { manualTransferEnabled: !!row.manual, instructions: { bankName: row.bank ?? null, accountName: row.acc_name ?? null, accountNumber: row.acc_no ?? null, instructions: row.instructions ?? null, qrisImageUrl: row.qris_image ?? null } };
+    } catch {
+      try {
+        const rows = await db.execute(sql`select "QrManualTransferEnabled" as manual, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
+        const row = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
+        if (row) return { manualTransferEnabled: !!row.manual, instructions: { bankName: row.bank ?? null, accountName: row.acc_name ?? null, accountNumber: row.acc_no ?? null, instructions: row.instructions ?? null, qrisImageUrl: null } };
+      } catch {}
+    }
+  }
+  return fallback;
+}
+
 export async function getPublicStorefrontCatalog(storeId?: string | null) {
+  const { business, store } = await loadStoreContext(storeId);
   // Default aktif: storefront checkout (transfer manual) tersedia sampai bisnis
   // secara eksplisit menonaktifkannya lewat setting "Transfer manual".
   let manualTransferEnabled = true;
-  try {
-    const rows = await db.execute(sql`select "QrManualTransferEnabled" as manual from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
-    const row = (rows as any)?.rows?.[0];
-    if (row) manualTransferEnabled = !!row.manual;
-  } catch {
-    manualTransferEnabled = true;
+  let paymentInstructions = { bankName: null as string | null, accountName: null as string | null, accountNumber: null as string | null, instructions: null as string | null, qrisImageUrl: null as string | null };
+  if (business) {
+    const cfg = await loadPaymentConfig(business.id);
+    manualTransferEnabled = cfg.manualTransferEnabled;
+    paymentInstructions = cfg.instructions;
   }
-  const { business, store } = await loadStoreContext(storeId);
   if (!business || !store) {
     return {
       business: { name: "Niraya", description: null, logoUrl: null, city: null, storeCount: 0 },
@@ -130,6 +172,7 @@ export async function getPublicStorefrontCatalog(storeId?: string | null) {
         storefrontCheckoutEnabled: !!manualTransferEnabled,
         manualTransferEnabled: !!manualTransferEnabled,
         methods: manualTransferEnabled ? [{ id: "manual_transfer", label: "Transfer Manual" }] : [],
+        instructions: paymentInstructions,
       },
       categories: [],
       products: [],
@@ -196,6 +239,7 @@ export async function getPublicStorefrontCatalog(storeId?: string | null) {
       storefrontCheckoutEnabled: !!manualTransferEnabled,
       manualTransferEnabled: !!manualTransferEnabled,
       methods: manualTransferEnabled ? [{ id: "manual_transfer", label: "Transfer Manual" }] : [],
+      instructions: paymentInstructions,
     },
     categories: cats.sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name)),
     products: prods.map((p) => {

@@ -225,11 +225,12 @@ export const operationalSettingsSchema = z.object({
 
 export const paymentSettingsSchema = z.object({
   paymentGatewayModuleStatus: z.enum(["NOT_INSTALLED", "INSTALLED", "CONFIGURED"]).default("NOT_INSTALLED"),
-  qrManualTransferEnabled: z.boolean().default(false),
+  qrManualTransferEnabled: z.boolean().default(true),
   manualTransferBankName: z.string().trim().max(120).default(""),
   manualTransferAccountName: z.string().trim().max(120).default(""),
   manualTransferAccountNumber: z.string().trim().max(120).default(""),
   manualTransferInstructions: z.string().trim().max(1000).default(""),
+  manualTransferQrisImageUrl: z.string().trim().max(2_000_000).optional().nullable(),
   acceptCash: z.boolean().default(true),
   acceptCard: z.boolean().default(false),
   acceptQris: z.boolean().default(false),

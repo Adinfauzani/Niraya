@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { getSession } from "@/lib/auth";
 import { db } from "@/server/db";
 import {
   businesses,
+  businessSettings,
   businessProfile,
   notificationSettings,
   privacySecuritySettings,
@@ -99,6 +100,7 @@ const paymentSchema = z.object({
   manualTransferAccountName: z.string().trim().max(120).default(""),
   manualTransferAccountNumber: z.string().trim().max(120).default(""),
   manualTransferInstructions: z.string().trim().max(1000).default(""),
+  manualTransferQrisImageUrl: z.string().trim().max(2_000_000).optional().nullable(),
   acceptCash: z.boolean().default(true),
   acceptCard: z.boolean().default(false),
   acceptQris: z.boolean().default(false),
@@ -157,6 +159,35 @@ export async function GET() {
     const { businessId, storeId } = await getTenantIds();
     const settingsId = businessId || "default";
 
+    const loadPaymentOrNull = async () => {
+      try {
+        const [row] = await db.select().from(paymentSettings).where(eq(paymentSettings.id, settingsId)).limit(1);
+        return row ?? null;
+      } catch (e: any) {
+        if (e?.code !== "42703" && e?.cause?.code !== "42703") throw e;
+        try {
+          const rows = await db.execute(sql`
+            select "Id","BusinessId","PaymentGatewayModuleStatus","QrManualTransferEnabled",
+              "ManualTransferBankName","ManualTransferAccountName","ManualTransferAccountNumber","ManualTransferInstructions",
+              "AcceptCash","AcceptCard","AcceptQris","AcceptTransfer","CreatedAt","UpdatedAt"
+            from "settings"."PaymentSettings" where "Id" = ${settingsId} limit 1
+          `);
+          const r = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
+          if (!r) return null;
+          return {
+            id: r.Id, businessId: r.BusinessId, paymentGatewayModuleStatus: r.PaymentGatewayModuleStatus,
+            qrManualTransferEnabled: r.QrManualTransferEnabled, manualTransferBankName: r.ManualTransferBankName,
+            manualTransferAccountName: r.ManualTransferAccountName, manualTransferAccountNumber: r.ManualTransferAccountNumber,
+            manualTransferInstructions: r.ManualTransferInstructions, manualTransferQrisImageUrl: null,
+            acceptCash: r.AcceptCash, acceptCard: r.AcceptCard, acceptQris: r.AcceptQris, acceptTransfer: r.AcceptTransfer,
+            createdAt: r.CreatedAt, updatedAt: r.UpdatedAt,
+          } as any;
+        } catch {
+          return null;
+        }
+      }
+    };
+
     const [
       profile,
       notifications,
@@ -175,7 +206,7 @@ export async function GET() {
       loadTableOrNull(accountSettings, eq(accountSettings.id, settingsId)),
       loadTableOrNull(appearanceSettings, eq(appearanceSettings.id, settingsId)),
       loadTableOrNull(operationalSettings, eq(operationalSettings.id, settingsId)),
-      loadTableOrNull(paymentSettings, eq(paymentSettings.id, settingsId)),
+      loadPaymentOrNull(),
       loadTableOrNull(systemSettings, eq(systemSettings.id, settingsId)),
       loadTableOrNull(receiptSettings, and(
         eq(receiptSettings.businessId, businessId || "00000000-0000-0000-0000-000000000001"),
@@ -248,11 +279,12 @@ export async function GET() {
       },
       payment: payment ?? {
         paymentGatewayModuleStatus: "NOT_INSTALLED",
-        qrManualTransferEnabled: false,
+        qrManualTransferEnabled: true,
         manualTransferBankName: "",
         manualTransferAccountName: "",
         manualTransferAccountNumber: "",
         manualTransferInstructions: "",
+        manualTransferQrisImageUrl: null,
         acceptCash: true,
         acceptCard: false,
         acceptQris: false,
@@ -307,6 +339,10 @@ export async function PATCH(request: Request) {
         .insert(businessProfile)
         .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
         .onConflictDoUpdate({ target: businessProfile.id, set: { ...v, updatedAt: now } });
+      await db
+        .update(businesses)
+        .set({ name: v.businessName, updatedAt: now })
+        .where(eq(businesses.id, businessId));
       return NextResponse.json({ ok: true, section });
     }
     if (section === "notifications") {
@@ -373,10 +409,121 @@ export async function PATCH(request: Request) {
     }
     if (section === "payment") {
       const v = paymentSchema.parse(payload);
-      await db
-        .insert(paymentSettings)
-        .values({ id: settingsId, businessId, ...v, updatedAt: now } as any)
-        .onConflictDoUpdate({ target: paymentSettings.id, set: { ...v, updatedAt: now } });
+      const qris = (v.manualTransferQrisImageUrl || null) as string | null;
+      const errText = (e: any) => [e?.message, e?.cause?.message, e?.query, e?.cause?.query, e?.cause?.detail, e?.detail, e?.cause?.hint].filter(Boolean).join("\n");
+      const isMissingQrisColumn = (e: any) => {
+        const t = errText(e);
+        if (/ManualTransferQrisImageUrl/i.test(t) && (/does not exist|undefined column|42703/i.test(t) || String(e?.code ?? e?.cause?.code ?? "") === "42703")) return true;
+        return String(e?.code ?? e?.cause?.code ?? "") === "42703" && !/ManualTransferQrisImageUrl/i.test(t) ? false : false;
+      };
+      const nowIso = now.toISOString();
+      const savePaymentWithoutQris = async () => {
+        await db.execute(sql`
+          insert into "settings"."PaymentSettings" (
+            "Id","BusinessId","PaymentGatewayModuleStatus","QrManualTransferEnabled",
+            "ManualTransferBankName","ManualTransferAccountName","ManualTransferAccountNumber","ManualTransferInstructions",
+            "AcceptCash","AcceptCard","AcceptQris","AcceptTransfer","UpdatedAt"
+          ) values (
+            ${settingsId}, ${businessId}::uuid, ${v.paymentGatewayModuleStatus}, ${v.qrManualTransferEnabled},
+            ${v.manualTransferBankName || null}, ${v.manualTransferAccountName || null}, ${v.manualTransferAccountNumber || null}, ${v.manualTransferInstructions || null},
+            ${v.acceptCash}, ${v.acceptCard}, ${v.acceptQris}, ${v.acceptTransfer}, ${nowIso}::timestamptz
+          )
+          on conflict ("Id") do update set
+            "PaymentGatewayModuleStatus" = excluded."PaymentGatewayModuleStatus",
+            "QrManualTransferEnabled" = excluded."QrManualTransferEnabled",
+            "ManualTransferBankName" = excluded."ManualTransferBankName",
+            "ManualTransferAccountName" = excluded."ManualTransferAccountName",
+            "ManualTransferAccountNumber" = excluded."ManualTransferAccountNumber",
+            "ManualTransferInstructions" = excluded."ManualTransferInstructions",
+            "AcceptCash" = excluded."AcceptCash",
+            "AcceptCard" = excluded."AcceptCard",
+            "AcceptQris" = excluded."AcceptQris",
+            "AcceptTransfer" = excluded."AcceptTransfer",
+            "UpdatedAt" = excluded."UpdatedAt"
+        `);
+      };
+      const savePaymentWithQris = async () => {
+        await db.execute(sql`
+          insert into "settings"."PaymentSettings" (
+            "Id","BusinessId","PaymentGatewayModuleStatus","QrManualTransferEnabled",
+            "ManualTransferBankName","ManualTransferAccountName","ManualTransferAccountNumber","ManualTransferInstructions",
+            "ManualTransferQrisImageUrl","AcceptCash","AcceptCard","AcceptQris","AcceptTransfer","UpdatedAt"
+          ) values (
+            ${settingsId}, ${businessId}::uuid, ${v.paymentGatewayModuleStatus}, ${v.qrManualTransferEnabled},
+            ${v.manualTransferBankName || null}, ${v.manualTransferAccountName || null}, ${v.manualTransferAccountNumber || null}, ${v.manualTransferInstructions || null},
+            ${qris}, ${v.acceptCash}, ${v.acceptCard}, ${v.acceptQris}, ${v.acceptTransfer}, ${nowIso}::timestamptz
+          )
+          on conflict ("Id") do update set
+            "PaymentGatewayModuleStatus" = excluded."PaymentGatewayModuleStatus",
+            "QrManualTransferEnabled" = excluded."QrManualTransferEnabled",
+            "ManualTransferBankName" = excluded."ManualTransferBankName",
+            "ManualTransferAccountName" = excluded."ManualTransferAccountName",
+            "ManualTransferAccountNumber" = excluded."ManualTransferAccountNumber",
+            "ManualTransferInstructions" = excluded."ManualTransferInstructions",
+            "ManualTransferQrisImageUrl" = excluded."ManualTransferQrisImageUrl",
+            "AcceptCash" = excluded."AcceptCash",
+            "AcceptCard" = excluded."AcceptCard",
+            "AcceptQris" = excluded."AcceptQris",
+            "AcceptTransfer" = excluded."AcceptTransfer",
+            "UpdatedAt" = excluded."UpdatedAt"
+        `);
+      };
+      try {
+        await savePaymentWithQris();
+      } catch (e: any) {
+        if (isMissingQrisColumn(e)) {
+          await savePaymentWithoutQris();
+        } else {
+          throw e;
+        }
+      }
+      // Sync legacy BusinessSettings (global id='default') for storefront readers.
+      try {
+        const syncLegacyWithoutQris = async () => {
+          await db.execute(sql`
+            insert into "settings"."BusinessSettings" (
+              "Id","BusinessId","BusinessName","QrManualTransferEnabled",
+              "ManualTransferBankName","ManualTransferAccountName","ManualTransferAccountNumber","ManualTransferInstructions","UpdatedAt"
+            ) values (
+              'default', ${businessId}::uuid, '', ${v.qrManualTransferEnabled},
+              ${v.manualTransferBankName || null}, ${v.manualTransferAccountName || null}, ${v.manualTransferAccountNumber || null}, ${v.manualTransferInstructions || null}, ${nowIso}::timestamptz
+            )
+            on conflict ("Id") do update set
+              "QrManualTransferEnabled" = excluded."QrManualTransferEnabled",
+              "ManualTransferBankName" = excluded."ManualTransferBankName",
+              "ManualTransferAccountName" = excluded."ManualTransferAccountName",
+              "ManualTransferAccountNumber" = excluded."ManualTransferAccountNumber",
+              "ManualTransferInstructions" = excluded."ManualTransferInstructions",
+              "UpdatedAt" = excluded."UpdatedAt"
+          `);
+        };
+        const syncLegacyWithQris = async () => {
+          await db.execute(sql`
+            insert into "settings"."BusinessSettings" (
+              "Id","BusinessId","BusinessName","QrManualTransferEnabled",
+              "ManualTransferBankName","ManualTransferAccountName","ManualTransferAccountNumber","ManualTransferInstructions",
+              "ManualTransferQrisImageUrl","UpdatedAt"
+            ) values (
+              'default', ${businessId}::uuid, '', ${v.qrManualTransferEnabled},
+              ${v.manualTransferBankName || null}, ${v.manualTransferAccountName || null}, ${v.manualTransferAccountNumber || null}, ${v.manualTransferInstructions || null},
+              ${qris}, ${nowIso}::timestamptz
+            )
+            on conflict ("Id") do update set
+              "QrManualTransferEnabled" = excluded."QrManualTransferEnabled",
+              "ManualTransferBankName" = excluded."ManualTransferBankName",
+              "ManualTransferAccountName" = excluded."ManualTransferAccountName",
+              "ManualTransferAccountNumber" = excluded."ManualTransferAccountNumber",
+              "ManualTransferInstructions" = excluded."ManualTransferInstructions",
+              "ManualTransferQrisImageUrl" = excluded."ManualTransferQrisImageUrl",
+              "UpdatedAt" = excluded."UpdatedAt"
+          `);
+        };
+        try {
+          await syncLegacyWithQris();
+        } catch (e: any) {
+          if (isMissingQrisColumn(e)) await syncLegacyWithoutQris();
+        }
+      } catch {}
       return NextResponse.json({ ok: true, section });
     }
     if (section === "system") {
@@ -399,6 +546,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Bagian pengaturan tidak valid." }, { status: 400 });
   } catch (e: any) {
     if (e?.name === "ZodError") return NextResponse.json({ error: e.issues?.[0]?.message || "Data tidak valid." }, { status: 400 });
-    return NextResponse.json({ error: e?.message || "Gagal menyimpan pengaturan." }, { status: 500 });
+    const detail = [e?.cause?.message, e?.cause?.detail, e?.cause?.hint, e?.detail, e?.hint].filter(Boolean).join(" | ") || undefined;
+    const msg = e?.message || "Gagal menyimpan pengaturan.";
+    return NextResponse.json({ error: detail ? `${msg} — ${detail}` : msg }, { status: 500 });
   }
 }

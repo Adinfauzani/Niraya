@@ -219,6 +219,13 @@ export function StorefrontPaymentPage({ orderId }: { orderId: string }) {
           </Card>
           <Card className="rounded-3xl p-4 sm:p-5">
             <p className="text-sm font-medium">Instruksi transfer</p>
+            {order.payment?.instructions?.qrisImageUrl ? (
+              <div className="mt-3 flex flex-col items-center gap-2 rounded-2xl border bg-muted/10 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Scan QRIS untuk bayar</p>
+                <img src={String(order.payment.instructions.qrisImageUrl)} alt="QRIS pembayaran" className="h-56 w-56 rounded-xl border bg-white object-contain p-2" />
+                <p className="text-center text-xs text-muted-foreground">Scan dengan aplikasi pembayaran, lalu unggah bukti transfer di bawah.</p>
+              </div>
+            ) : null}
             {order.payment?.instructions?.accountNumber ||
             order.payment?.instructions?.bankName ? (
               <div className="mt-3 space-y-2 text-sm">
@@ -254,11 +261,11 @@ export function StorefrontPaymentPage({ orderId }: { orderId: string }) {
                   </button>
                 ) : null}
               </div>
-            ) : (
+            ) : !order.payment?.instructions?.qrisImageUrl ? (
               <p className="mt-2 text-sm text-muted-foreground">
                 Transfer sesuai total, lalu unggah bukti untuk verifikasi staff.
               </p>
-            )}
+            ) : null}
             <div
               className={`mt-3 flex items-start gap-2 rounded-2xl border p-3 text-xs ${paid ? "border-green-500/20 bg-green-500/[0.05]" : rejected ? "border-destructive/20 bg-destructive/[0.04] text-destructive" : "border-blue-500/12 bg-blue-500/[0.04] text-muted-foreground"}`}
             >

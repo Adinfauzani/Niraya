@@ -120,6 +120,15 @@ export async function getStoreDirectory(): Promise<StoreDirectoryEntry[]> {
     soldByStore.set(row.storeId, perStore);
   }
 
+  const shuffle = <T,>(arr: readonly T[]) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j]!, a[i]!];
+    }
+    return a;
+  };
+
   return storeRows.map((store) => {
     const ownProfile = profileByBusiness.get(store.businessId);
     const profile = ownProfile ?? defaultProfile;
@@ -130,20 +139,29 @@ export async function getStoreDirectory(): Promise<StoreDirectoryEntry[]> {
 
     let popular: StorePopularProduct[] = [];
     const sold = soldByStore.get(store.id);
+    const businessProducts = productsByBusiness.get(store.businessId) ?? [];
+    const soldIds = new Set(sold?.keys() ?? []);
+
     if (sold && sold.size) {
-      popular = [...sold.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
+      const soldRanked = [...sold.entries()]
+        .sort((a, b) => b[1] - a[1] || Math.random() - 0.5)
         .flatMap(([productId, qty]) => {
           const product = productById.get(productId);
           return product
             ? [{ id: product.id, name: product.name, imageUrl: product.imageUrl, sold: qty }]
             : [];
         });
-    }
-    // Fallback when a store has no sales yet: show its first active products.
-    if (!popular.length) {
-      popular = (productsByBusiness.get(store.businessId) ?? []).slice(0, 3).map((product) => ({
+      // Prefer produk paling sering dipesan; isi sisa slot (jika < 3) secara acak.
+      const filler = shuffle(businessProducts.filter((p) => !soldIds.has(p.id))).map((product) => ({
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        sold: 0,
+      }));
+      popular = [...soldRanked, ...filler].slice(0, 3);
+    } else {
+      // Belum ada penjualan: tampilkan produk acak.
+      popular = shuffle(businessProducts).slice(0, 3).map((product) => ({
         id: product.id,
         name: product.name,
         imageUrl: product.imageUrl,

@@ -41,7 +41,7 @@ export async function resolveStoreBySlug(slug: string): Promise<ResolvedStore | 
         sql`${slugExpr} = ${normalized}`,
       ),
     )
-    .orderBy(stores.createdAt, stores.id)
+    .orderBy(stores.id)
     .limit(1);
 
   return row ?? null;

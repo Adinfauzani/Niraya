@@ -6,9 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  BellIcon, Building2Icon, CreditCardIcon, DownloadIcon, Loader2Icon,
+  BellIcon, Building2Icon, CreditCardIcon, DownloadIcon, LinkIcon, Loader2Icon,
   MonitorIcon, MoonIcon, PaletteIcon, SaveIcon, ServerIcon, Settings2Icon,
-  ShieldIcon, SunIcon, UserCircle2Icon,
+  ShieldIcon, StoreIcon, SunIcon, UserCircle2Icon,
 } from "lucide-react";
 
 import { useTheme } from "@/components/ThemeProvider";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +27,7 @@ import { useRealUser } from "@/hooks/useRealUser";
 import { BUSINESS_QUERY_KEY } from "@/hooks/useBusiness";
 import { useBusinessStore } from "@/stores/businessStore";
 import { queryClient } from "@/lib/queryClient";
+import { slugifyStoreName } from "@/lib/storeSlug";
 import { appRoleLabel } from "@/lib/businessLabels";
 import { initials } from "@/features/customers/CustomerDetailSheet";
 import { cn } from "@/lib/utils";
@@ -97,17 +99,15 @@ type SettingsPayload = {
     manualTransferAccountName: string;
     manualTransferAccountNumber: string;
     manualTransferInstructions: string;
+    manualTransferQrisImageUrl: string | null;
     acceptCash: boolean;
     acceptCard: boolean;
     acceptQris: boolean;
     acceptTransfer: boolean;
   };
   system: {
-    maintenanceMode: boolean;
-    maintenanceMessage: string | null;
     debugMode: boolean;
     apiRateLimit: number;
-    enableApiDocs: boolean;
     backupEnabled: boolean;
     backupFrequency: string;
   };
@@ -197,11 +197,12 @@ const operationalSchema = z.object({
 
 const paymentSchema = z.object({
   paymentGatewayModuleStatus: z.enum(["NOT_INSTALLED", "INSTALLED", "CONFIGURED"]).default("NOT_INSTALLED"),
-  qrManualTransferEnabled: z.boolean().default(false),
+  qrManualTransferEnabled: z.boolean().default(true),
   manualTransferBankName: z.string().trim().max(120).default(""),
   manualTransferAccountName: z.string().trim().max(120).default(""),
   manualTransferAccountNumber: z.string().trim().max(120).default(""),
   manualTransferInstructions: z.string().trim().max(1000).default(""),
+  manualTransferQrisImageUrl: z.string().optional().nullable(),
   acceptCash: z.boolean().default(true),
   acceptCard: z.boolean().default(false),
   acceptQris: z.boolean().default(false),
@@ -209,16 +210,17 @@ const paymentSchema = z.object({
 });
 
 const systemSchema = z.object({
-  maintenanceMode: z.boolean().default(false),
-  maintenanceMessage: z.string().trim().max(1000).optional(),
   debugMode: z.boolean().default(false),
   apiRateLimit: z.number().int().min(10).max(10000).default(100),
-  enableApiDocs: z.boolean().default(false),
   backupEnabled: z.boolean().default(true),
   backupFrequency: z.enum(["daily", "weekly", "monthly"]).default("daily"),
 });
 
 const receiptSchema = z.object({ receiptFooter: z.string().trim().max(240) });
+
+const storeNameSchema = z.object({
+  storeName: z.string().trim().min(1, "Nama toko wajib diisi").max(200),
+});
 
 type ProfileValues = z.input<typeof profileSchema>;
 type NotificationValues = z.input<typeof notificationSchema>;
@@ -229,9 +231,11 @@ type OperationalValues = z.input<typeof operationalSchema>;
 type PaymentValues = z.input<typeof paymentSchema>;
 type SystemValues = z.input<typeof systemSchema>;
 type ReceiptValues = z.input<typeof receiptSchema>;
+type StoreNameValues = z.infer<typeof storeNameSchema>;
 
 const TABS = [
   { value: "profil-bisnis", label: "Profil Bisnis", icon: Building2Icon, section: "profile" },
+  { value: "toko", label: "Toko & Menu", icon: StoreIcon, section: "store" },
   { value: "notifikasi", label: "Notifikasi", icon: BellIcon, section: "notifications" },
   { value: "privacy-security", label: "Privacy & Security", icon: ShieldIcon, section: "privacySecurity" },
   { value: "akun", label: "Akun", icon: UserCircle2Icon, section: "account" },
@@ -300,9 +304,25 @@ export function SettingsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  const {
+    selectedBusinessId,
+    selectedStoreId,
+    availableBusinesses,
+    loadBusinesses,
+  } = useBusinessStore();
+  const [savingStore, setSavingStore] = useState(false);
+  const [storeOrigin, setStoreOrigin] = useState("");
+  useEffect(() => {
+    if (typeof window !== "undefined") setStoreOrigin(window.location.origin);
+  }, []);
+  const currentBusiness = availableBusinesses.find((b) => b.businessId === selectedBusinessId) ?? availableBusinesses[0] ?? null;
+  const currentStore = (currentBusiness?.stores.find((s) => s.id === selectedStoreId) ?? currentBusiness?.stores[0]) ?? null;
+
   const role = realUser?.role as string | undefined;
   const canManageBusiness = role ? ["owner", "admin", "manager"].includes(role) : false;
-  const readOnlyBusiness = !canManageBusiness;
+  // Jangan kunci form saat role belum termuat; server tetap menegakkan izin.
+  const readOnlyBusiness = role ? !canManageBusiness : false;
+  const canEditStore = role ? ["owner", "admin"].includes(role) : false;
 
   const profileForm = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) as any, defaultValues: { businessName: "", address: "", phone: "", email: "", logoUrl: "", description: "", website: "", socialMedia: "" } });
   const notificationForm = useForm<NotificationValues>({ resolver: zodResolver(notificationSchema) as any, defaultValues: { emailEnabled: true, smsEnabled: false, pushEnabled: true, orderEmail: true, orderSms: false, orderPush: true, lowStockEmail: true, lowStockSms: false, lowStockPush: true, paymentEmail: true, paymentSms: false, paymentPush: true, marketingEmail: false } });
@@ -310,11 +330,16 @@ export function SettingsPage() {
   const accountForm = useForm<AccountValues>({ resolver: zodResolver(accountSchema) as any, defaultValues: { defaultUserRole: "cashier", maxUsers: 50, autoApproveUsers: false, requireEmailVerification: true } });
   const appearanceForm = useForm<AppearanceValues>({ resolver: zodResolver(appearanceSchema) as any, defaultValues: { theme: "system", primaryColor: "#2563eb", fontFamily: "system", language: "id", dateFormat: "DD/MM/YYYY", timeFormat: "24h", compactMode: false } });
   const operationalForm = useForm<OperationalValues>({ resolver: zodResolver(operationalSchema) as any, defaultValues: { currency: "IDR", timezone: "Asia/Jakarta", taxRatePercent: 0, memberDiscountRatePercent: 0, lowStockThreshold: 0, reservationExpiryMinutes: 30, autoCancelUnpaidOrders: true, allowSplitPayment: true } });
-  const paymentForm = useForm<PaymentValues>({ resolver: zodResolver(paymentSchema) as any, defaultValues: { paymentGatewayModuleStatus: "NOT_INSTALLED", qrManualTransferEnabled: false, manualTransferBankName: "", manualTransferAccountName: "", manualTransferAccountNumber: "", manualTransferInstructions: "", acceptCash: true, acceptCard: false, acceptQris: false, acceptTransfer: true } });
-  const systemForm = useForm<SystemValues>({ resolver: zodResolver(systemSchema) as any, defaultValues: { maintenanceMode: false, maintenanceMessage: "", debugMode: false, apiRateLimit: 100, enableApiDocs: false, backupEnabled: true, backupFrequency: "daily" } });
+  const paymentForm = useForm<PaymentValues>({ resolver: zodResolver(paymentSchema) as any, defaultValues: { paymentGatewayModuleStatus: "NOT_INSTALLED", qrManualTransferEnabled: true, manualTransferBankName: "", manualTransferAccountName: "", manualTransferAccountNumber: "", manualTransferInstructions: "", manualTransferQrisImageUrl: null, acceptCash: true, acceptCard: false, acceptQris: false, acceptTransfer: true } });
+  const systemForm = useForm<SystemValues>({ resolver: zodResolver(systemSchema) as any, defaultValues: { debugMode: false, apiRateLimit: 100, backupEnabled: true, backupFrequency: "daily" } });
   const receiptForm = useForm<ReceiptValues>({ resolver: zodResolver(receiptSchema) as any, defaultValues: { receiptFooter: "" } });
+  const storeForm = useForm<StoreNameValues>({ resolver: zodResolver(storeNameSchema) as any, defaultValues: { storeName: "" } });
+  useEffect(() => {
+    if (currentStore?.name) storeForm.reset({ storeName: currentStore.name });
+  }, [currentStore?.id, currentStore?.name, storeForm]);
 
   useEffect(() => {
+    void loadBusinesses();
     let active = true;
     (async () => {
       try {
@@ -328,8 +353,20 @@ export function SettingsPage() {
         accountForm.reset({ defaultUserRole: d.account.defaultUserRole as "owner" | "admin" | "manager" | "cashier" | "staff", maxUsers: d.account.maxUsers, autoApproveUsers: d.account.autoApproveUsers, requireEmailVerification: d.account.requireEmailVerification });
         appearanceForm.reset({ theme: d.appearance.theme as "light" | "dark" | "system", primaryColor: d.appearance.primaryColor, fontFamily: d.appearance.fontFamily, language: d.appearance.language as "id" | "en", dateFormat: d.appearance.dateFormat as "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD", timeFormat: d.appearance.timeFormat as "12h" | "24h", compactMode: d.appearance.compactMode });
         operationalForm.reset({ currency: "IDR" as const, timezone: d.operational.timezone as "Asia/Jakarta" | "Asia/Makassar" | "Asia/Jayapura", taxRatePercent: Number(d.operational.taxRate) * 100, memberDiscountRatePercent: Number(d.operational.memberDiscountRate) * 100, lowStockThreshold: d.operational.lowStockThreshold, reservationExpiryMinutes: d.operational.reservationExpiryMinutes, autoCancelUnpaidOrders: d.operational.autoCancelUnpaidOrders, allowSplitPayment: d.operational.allowSplitPayment });
-        paymentForm.reset({ paymentGatewayModuleStatus: d.payment.paymentGatewayModuleStatus as "NOT_INSTALLED" | "INSTALLED" | "CONFIGURED", qrManualTransferEnabled: d.payment.qrManualTransferEnabled, manualTransferBankName: d.payment.manualTransferBankName, manualTransferAccountName: d.payment.manualTransferAccountName, manualTransferAccountNumber: d.payment.manualTransferAccountNumber, manualTransferInstructions: d.payment.manualTransferInstructions, acceptCash: d.payment.acceptCash, acceptCard: d.payment.acceptCard, acceptQris: d.payment.acceptQris, acceptTransfer: d.payment.acceptTransfer });
-        systemForm.reset({ maintenanceMode: d.system.maintenanceMode, maintenanceMessage: d.system.maintenanceMessage || undefined, debugMode: d.system.debugMode, apiRateLimit: d.system.apiRateLimit, enableApiDocs: d.system.enableApiDocs, backupEnabled: d.system.backupEnabled, backupFrequency: d.system.backupFrequency as "daily" | "weekly" | "monthly" });
+        paymentForm.reset({
+          paymentGatewayModuleStatus: (d.payment.paymentGatewayModuleStatus as "NOT_INSTALLED" | "INSTALLED" | "CONFIGURED") ?? "NOT_INSTALLED",
+          qrManualTransferEnabled: d.payment.qrManualTransferEnabled ?? true,
+          manualTransferBankName: d.payment.manualTransferBankName ?? "",
+          manualTransferAccountName: d.payment.manualTransferAccountName ?? "",
+          manualTransferAccountNumber: d.payment.manualTransferAccountNumber ?? "",
+          manualTransferInstructions: d.payment.manualTransferInstructions ?? "",
+          manualTransferQrisImageUrl: d.payment.manualTransferQrisImageUrl || null,
+          acceptCash: d.payment.acceptCash ?? true,
+          acceptCard: d.payment.acceptCard ?? false,
+          acceptQris: d.payment.acceptQris ?? false,
+          acceptTransfer: d.payment.acceptTransfer ?? true,
+        });
+        systemForm.reset({ debugMode: d.system.debugMode, apiRateLimit: d.system.apiRateLimit, backupEnabled: d.system.backupEnabled, backupFrequency: d.system.backupFrequency as "daily" | "weekly" | "monthly" });
         receiptForm.reset({ receiptFooter: d.receipt.footer || "" });
         setLoadError(null);
       } catch (e: any) { if (active) setLoadError(e?.message || "Gagal memuat pengaturan."); }
@@ -373,6 +410,32 @@ export function SettingsPage() {
     finally { setExporting(false); }
   }
 
+  async function onSaveStore(values: StoreNameValues) {
+    if (!currentStore) return;
+    setSavingStore(true);
+    try {
+      const res = await fetch("/api/business", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "store.update", payload: { id: currentStore.id, name: values.storeName, code: currentStore.code, isActive: currentStore.isActive } }),
+      });
+      const payload = await readJson<any>(res);
+      if (!res.ok) throw new Error(payload?.error || "Gagal menyimpan toko.");
+      await loadBusinesses();
+      storeForm.reset({ storeName: values.storeName.trim() });
+      toast.success("Nama toko disimpan", { description: "Tautan menu publik diperbarui sesuai nama toko." });
+    } catch (e: any) {
+      toast.error("Gagal menyimpan toko", { description: e?.message || "Silakan coba lagi." });
+    } finally {
+      setSavingStore(false);
+    }
+  }
+
+  const watchedStoreName = storeForm.watch("storeName") ?? "";
+  const storeSlugPreview = slugifyStoreName(watchedStoreName || currentStore?.name || "");
+  const storeLinkPreview = storeSlugPreview ? `${storeOrigin || ""}/${storeSlugPreview}/menu` : "";
+
   const saveButton = (section: string, disabled: boolean, label = "Simpan perubahan") => (
     <Button type="submit" disabled={disabled || saving === section || readOnlyBusiness} className="h-9 rounded-xl">
       {saving === section ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <SaveIcon className="size-4" aria-hidden />}{label}
@@ -384,13 +447,21 @@ export function SettingsPage() {
       <PageHeader title="Pengaturan" description="Kelola profil bisnis, akun, keamanan, dan preferensi aplikasi." />
 
       <Tabs value={tab} onValueChange={setTab} defaultValue="profil-bisnis" className="min-w-0 gap-7 pt-2">
-        <div className="mt-4 overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <TabsList variant="line" className="h-auto w-max justify-start gap-1.5 rounded-[2rem] border border-border/70 bg-card p-1.5 shadow-sm sm:w-full sm:flex-wrap">
+        <div className="mt-4 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:overflow-visible">
+          <TabsList
+            variant="line"
+            className="flex h-auto w-max items-center gap-1 rounded-full border border-border/60 bg-muted/30 p-1 sm:w-auto sm:flex-wrap"
+          >
             {TABS.map((t) => {
               const Icon = t.icon;
               return (
-                <TabsTrigger key={t.value} value={t.value} className="h-9 shrink-0 justify-start gap-2 rounded-full px-4 text-[13px] after:hidden hover:bg-muted/50 data-[state=active]:border data-[state=active]:border-border/70 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-sm">
-                  <Icon className="size-4" aria-hidden />{t.label}
+                <TabsTrigger
+                  key={t.value}
+                  value={t.value}
+                  className="h-8 flex-none shrink-0 gap-1.5 rounded-full border border-transparent px-3.5 text-[13px] font-medium text-muted-foreground after:hidden hover:bg-background/60 hover:text-foreground data-[state=active]:border-border/60 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {t.label}
                 </TabsTrigger>
               );
             })}
@@ -399,7 +470,36 @@ export function SettingsPage() {
 
         <div className="min-w-0 rounded-2xl border border-border/50 bg-background/40 p-4 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/30 sm:p-5 dark:border-white/10 dark:bg-background/20">
           {loading ? (
-            <div className="flex min-h-[220px] items-center justify-center text-sm text-muted-foreground"><Loader2Icon className="mr-2 size-4 animate-spin" aria-hidden />Memuat pengaturan...</div>
+            <div className="space-y-6" aria-busy="true" aria-label="Memuat pengaturan">
+              <div className="flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-72 max-w-full" />
+                </div>
+                <Skeleton className="h-9 w-36 rounded-xl" />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-full rounded-xl" /></div>
+                <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full rounded-xl" /></div>
+                <div className="space-y-2"><Skeleton className="h-4 w-20" /><Skeleton className="h-10 w-full rounded-xl" /></div>
+                <div className="space-y-2 sm:col-span-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-24 w-full rounded-xl" /></div>
+              </div>
+              <div className="space-y-3 rounded-xl border border-border/70 p-4">
+                <Skeleton className="h-4 w-36" />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full rounded-xl" /></div>
+                  <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-10 w-full rounded-xl" /></div>
+                </div>
+              </div>
+              <div className="space-y-3 rounded-xl border border-border/70 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between gap-4">
+                    <div className="space-y-2"><Skeleton className="h-4 w-40" /><Skeleton className="h-3 w-56 max-w-full" /></div>
+                    <Skeleton className="h-6 w-10 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : loadError ? (
             <div className="space-y-3"><p className="text-sm text-destructive">{loadError}</p><Button variant="outline" className="rounded-xl" onClick={() => window.location.reload()}>Muat ulang</Button></div>
           ) : (
@@ -444,6 +544,55 @@ export function SettingsPage() {
                           }} />
                         </FieldGrid>
                       </div>
+                    </SectionShell>
+                  </form>
+                </Form>
+              </TabsContent>
+
+              <TabsContent value="toko" className="mt-0">
+                <Form {...storeForm}>
+                  <form onSubmit={storeForm.handleSubmit(onSaveStore)}>
+                    <SectionShell
+                      title="Toko & Menu Publik"
+                      description="Nama toko (outlet) menentukan tautan menu publik, bukan nama bisnis."
+                      actions={
+                        <Button type="submit" disabled={!canEditStore || savingStore || !storeForm.formState.isDirty || !currentStore} className="h-9 rounded-xl">
+                          {savingStore ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <SaveIcon className="size-4" aria-hidden />}Simpan nama toko
+                        </Button>
+                      }
+                    >
+                      {!canEditStore ? <p className="text-[13px] text-muted-foreground">Perubahan nama/kode toko memerlukan peran admin atau owner.</p> : null}
+                      {!currentStore ? (
+                        <p className="text-sm text-muted-foreground">Belum ada toko yang terpilih.</p>
+                      ) : (
+                        <>
+                          <FieldGrid>
+                            <FormField control={storeForm.control} name="storeName" render={({ field }) => (
+                              <FormItem className="sm:col-span-2">
+                                <FormLabel>Nama toko (outlet)</FormLabel>
+                                <FormControl><Input placeholder="Nama toko" className="h-10 rounded-xl" disabled={!canEditStore} {...field} /></FormControl>
+                                <FormDescription>Dipakai pada direktori dan sebagai sumber tautan menu publik. Mengubahnya akan mengubah URL menu toko.</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                          </FieldGrid>
+                          <div className="space-y-2 rounded-xl border border-border/70 p-4">
+                            <p className="text-sm font-medium">Simulasi tautan menu publik</p>
+                            <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+                              <LinkIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                              <code className="min-w-0 break-all text-[13px]">{storeLinkPreview || "—"}</code>
+                            </div>
+                            <p className="text-[13px] text-muted-foreground">Preview slug: <span className="font-mono">{storeSlugPreview || "—"}</span>. Tautan aktif setelah disimpan; tautan lama (berdasarkan nama sebelumnya) tidak berlaku.</p>
+                            {currentStore && storeSlugPreview ? (
+                              <a href={`/${storeSlugPreview}/menu`} target="_blank" rel="noreferrer" className="inline-flex text-[13px] text-primary underline-offset-4 hover:underline">Buka tautan simulasi</a>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-border/70 px-4 py-1">
+                            <InfoRow label="Kode toko" value={<span className="font-mono text-[12px]">{currentStore.code || "—"}</span>} />
+                            <InfoRow label="ID toko" value={<span className="font-mono text-[12px]">{currentStore.id}</span>} />
+                          </div>
+                        </>
+                      )}
                     </SectionShell>
                   </form>
                 </Form>
@@ -659,18 +808,51 @@ export function SettingsPage() {
                     <SectionShell title="Pembayaran" description="Metode pembayaran yang didukung dan konfigurasi transfer manual." actions={saveButton("payment", !paymentForm.formState.isDirty)}>
                       {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
                       <div className="rounded-xl border border-border/70 p-4 space-y-3">
-                        <SwitchRow label="Tunai" checked={data?.payment.acceptCash || true} onChange={(v) => paymentForm.setValue("acceptCash", v)} disabled={readOnlyBusiness} description="Terima pembayaran tunai di POS." />
-                        <SwitchRow label="Kartu (EDC)" checked={data?.payment.acceptCard || false} onChange={(v) => paymentForm.setValue("acceptCard", v)} disabled={readOnlyBusiness} description="Terima pembayaran kartu via EDC." />
-                        <SwitchRow label="QRIS" checked={data?.payment.acceptQris || false} onChange={(v) => paymentForm.setValue("acceptQris", v)} disabled={readOnlyBusiness} description="Terima pembayaran QRIS." />
-                        <SwitchRow label="Transfer" checked={data?.payment.acceptTransfer || true} onChange={(v) => paymentForm.setValue("acceptTransfer", v)} disabled={readOnlyBusiness} description="Terima pembayaran transfer bank/e-wallet." />
+                        <SwitchRow label="Tunai" checked={!!paymentForm.watch("acceptCash")} onChange={(v) => paymentForm.setValue("acceptCash", v, { shouldDirty: true })} disabled={readOnlyBusiness} description="Terima pembayaran tunai di POS." />
+                        <SwitchRow label="Kartu (EDC)" checked={!!paymentForm.watch("acceptCard")} onChange={(v) => paymentForm.setValue("acceptCard", v, { shouldDirty: true })} disabled={readOnlyBusiness} description="Terima pembayaran kartu via EDC." />
+                        <SwitchRow label="QRIS" checked={!!paymentForm.watch("acceptQris")} onChange={(v) => paymentForm.setValue("acceptQris", v, { shouldDirty: true })} disabled={readOnlyBusiness} description="Terima pembayaran QRIS." />
+                        <SwitchRow label="Transfer" checked={!!paymentForm.watch("acceptTransfer")} onChange={(v) => paymentForm.setValue("acceptTransfer", v, { shouldDirty: true })} disabled={readOnlyBusiness} description="Terima pembayaran transfer bank/e-wallet." />
                       </div>
                       <div className="space-y-3 border-t border-border/60 pt-4">
-                        <SwitchRow label="Transfer manual" checked={data?.payment.qrManualTransferEnabled || false} onChange={(v) => paymentForm.setValue("qrManualTransferEnabled", v)} disabled={readOnlyBusiness} description="Aktifkan instruksi transfer manual untuk storefront. Verifikasi tetap staff." />
+                        <SwitchRow label="Transfer manual" checked={!!paymentForm.watch("qrManualTransferEnabled")} onChange={(v) => paymentForm.setValue("qrManualTransferEnabled", v, { shouldDirty: true })} disabled={readOnlyBusiness} description="Aktifkan instruksi transfer manual untuk storefront. Verifikasi tetap staff." />
                         <FieldGrid>
-                          <FormField control={paymentForm.control} name="manualTransferBankName" render={({ field }) => (<FormItem><FormLabel>Nama bank/e-wallet</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="BCA / Mandiri / ..." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                          <FormField control={paymentForm.control} name="manualTransferAccountName" render={({ field }) => (<FormItem><FormLabel>Nama pemilik</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="Nama rekening" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                          <FormField control={paymentForm.control} name="manualTransferAccountNumber" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Nomor rekening/tujuan</FormLabel><FormControl><Input className="h-10 rounded-xl font-mono" placeholder="1234567890" disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
-                          <FormField control={paymentForm.control} name="manualTransferInstructions" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Instruksi tambahan</FormLabel><FormControl><Textarea rows={3} className="rounded-xl" placeholder="Contoh: transfer sesuai total, lalu unggah bukti." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferBankName" render={({ field }) => (<FormItem><FormLabel>Nama bank/e-wallet</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="BCA / Mandiri / ..." disabled={readOnlyBusiness} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferAccountName" render={({ field }) => (<FormItem><FormLabel>Nama pemilik</FormLabel><FormControl><Input className="h-10 rounded-xl" placeholder="Nama rekening" disabled={readOnlyBusiness} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferAccountNumber" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Nomor rekening/tujuan</FormLabel><FormControl><Input className="h-10 rounded-xl font-mono" placeholder="1234567890" disabled={readOnlyBusiness} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferInstructions" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Instruksi tambahan</FormLabel><FormControl><Textarea rows={3} className="rounded-xl" placeholder="Contoh: transfer sesuai total, lalu unggah bukti." disabled={readOnlyBusiness} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={paymentForm.control} name="manualTransferQrisImageUrl" render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Gambar QRIS / QR pembayaran (opsional)</FormLabel>
+                              <FormControl>
+                                <div className="space-y-3">
+                                  <Input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="h-10 rounded-xl"
+                                    disabled={readOnlyBusiness}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      if (file.size > 1024 * 1024) { toast.error("Ukuran gambar QRIS maksimal 1MB."); e.target.value = ""; return; }
+                                      const reader = new FileReader();
+                                      reader.onload = () => field.onChange(String(reader.result || ""));
+                                      reader.readAsDataURL(file);
+                                    }}
+                                  />
+                                  {field.value ? (
+                                    <div className="flex items-start gap-3">
+                                      <img src={String(field.value)} alt="QRIS" className="h-40 w-40 rounded-xl border bg-white object-contain p-2" />
+                                      <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl" disabled={readOnlyBusiness} onClick={() => field.onChange(null)}>Hapus gambar</Button>
+                                    </div>
+                                  ) : (
+                                    <p className="text-[13px] text-muted-foreground">Unggah gambar QRIS statis agar pelanggan dapat scan saat bayar di halaman menu/checkout.</p>
+                                  )}
+                                </div>
+                              </FormControl>
+                              <FormDescription>Disimpan sebagai data gambar dan ditampilkan di halaman pembayaran pesanan (storefront).</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
                         </FieldGrid>
                       </div>
                       <Unavailable title="Payment gateway" description={`Status modul: ${data?.payment.paymentGatewayModuleStatus || "NOT_INSTALLED"}. Integrasi gateway tidak dibuat/diaktifkan otomatis dari halaman ini dan tidak mengubah riwayat transaksi historis.`} />
@@ -686,22 +868,10 @@ export function SettingsPage() {
                       {readOnlyBusiness ? <p className="text-[13px] text-muted-foreground">Akses baca. Perubahan memerlukan peran yang diizinkan.</p> : null}
                       <div className="rounded-xl border border-border/70 p-4 space-y-3">
                         <FieldGrid>
-                          <FormField control={systemForm.control} name="maintenanceMode" render={({ field }) => (
-                            <FormItem className="flex items-center gap-3">
-                              <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Maintenance mode" />
-                              <div><p className="text-sm font-medium">Maintenance mode</p><p className="text-[13px] text-muted-foreground">Blokir akses publik kecuali admin.</p></div>
-                            </FormItem>
-                          )} />
                           <FormField control={systemForm.control} name="debugMode" render={({ field }) => (
                             <FormItem className="flex items-center gap-3">
                               <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Debug mode" />
                               <div><p className="text-sm font-medium">Debug mode</p><p className="text-[13px] text-muted-foreground">Tampilkan error detail di client (hanya dev).</p></div>
-                            </FormItem>
-                          )} />
-                          <FormField control={systemForm.control} name="enableApiDocs" render={({ field }) => (
-                            <FormItem className="flex items-center gap-3">
-                              <Switch checked={field.value} onCheckedChange={field.onChange} disabled={readOnlyBusiness} aria-label="Enable API docs" />
-                              <div><p className="text-sm font-medium">API docs</p><p className="text-[13px] text-muted-foreground">Ekspos dokumentasi OpenAPI.</p></div>
                             </FormItem>
                           )} />
                           <FormField control={systemForm.control} name="backupEnabled" render={({ field }) => (
@@ -710,16 +880,11 @@ export function SettingsPage() {
                               <div><p className="text-sm font-medium">Backup otomatis</p><p className="text-[13px] text-muted-foreground">Aktifkan snapshot terjadwal database.</p></div>
                             </FormItem>
                           )} />
-                        </FieldGrid>
-                        <FormField control={systemForm.control} name="maintenanceMessage" render={({ field }) => (
-                          <FormItem><FormLabel>Pesan maintenance</FormLabel><FormControl><Textarea rows={2} className="rounded-xl" placeholder="Sistem sedang maintenance..." disabled={readOnlyBusiness} {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FieldGrid>
-                          <FormField control={systemForm.control} name="apiRateLimit" render={({ field }) => (
-                            <FormItem><FormLabel>API rate limit (req/menit)</FormLabel><FormControl><Input type="number" min={10} max={10000} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 100 : Math.floor(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
-                          )} />
                           <FormField control={systemForm.control} name="backupFrequency" render={({ field }) => (
                             <FormItem><FormLabel>Frekuensi backup</FormLabel><Select value={field.value} onValueChange={field.onChange} disabled={readOnlyBusiness}><FormControl><SelectTrigger className="h-10 w-full rounded-xl"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="daily">Harian</SelectItem><SelectItem value="weekly">Mingguan</SelectItem><SelectItem value="monthly">Bulanan</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={systemForm.control} name="apiRateLimit" render={({ field }) => (
+                            <FormItem><FormLabel>API rate limit (req/menit)</FormLabel><FormControl><Input type="number" min={10} max={10000} step={1} className="h-10 rounded-xl" disabled={readOnlyBusiness} value={field.value} onChange={(e) => field.onChange(e.target.value === "" ? 100 : Math.floor(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
                           )} />
                         </FieldGrid>
                       </div>
