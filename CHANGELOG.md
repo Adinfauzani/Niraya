@@ -12,7 +12,7 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ### Diperbaiki
 
-- Penyimpanan bukti pembayaran (S3-compatible, SigV4): perbaikan pembentukan canonical request sehingga signature valid dan upload tidak ditolak object storage.
+- Penyimpanan bukti pembayaran (S3-compatible, SigV4): perbaikan canonical URI dan canonical request (termasuk pemisah SignedHeaders) sehingga signature valid dan upload tidak ditolak object storage.
 - Mitigasi fail-soft saat pool koneksi database penuh (`EMAXCONNSESSION`): resolusi slug dan direktori toko serta agregasi discovery menangani kegagalan query (fallback kosong/terkontrol), batas query discovery diturunkan, dan halaman `/{storeSlug}/menu` menampilkan fallback sementara alih-alih crash saat pemuatan toko gagal.
 
 ## [0.1.3] - 2026-11-18
