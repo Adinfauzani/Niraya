@@ -230,7 +230,7 @@ export async function updateSession(request: NextRequest) {
   const protectedPaths = [
     ...dashboardPagePaths,
     "/onboarding",
-    "/home",
+    "/orders/me",
     "/api/business",
     "/api/pos",
     "/api/staff",
@@ -258,19 +258,14 @@ export async function updateSession(request: NextRequest) {
     matchesPrefix(request.nextUrl.pathname, path)
   );
 
-  // Guest pada landing dialihkan ke direktori toko.
-  if (!user && request.nextUrl.pathname === "/") {
-    return NextResponse.redirect(new URL("/search", request.url));
-  }
-
-  // Pengguna login tidak boleh ke landing (/); arahkan ke profil.
+  // Landing (/) publik untuk guest; pengguna login diarahkan ke discovery home.
   if (user && request.nextUrl.pathname === "/") {
-    return NextResponse.redirect(new URL("/profile", request.url));
+    return NextResponse.redirect(new URL("/home", request.url));
   }
 
-  // Login/signup/auth pages: redirect logged-in users to profile.
+  // Halaman login/signup: pengguna login diarahkan ke discovery home.
   if (user && isAuthPage) {
-    return NextResponse.redirect(new URL("/profile", request.url));
+    return NextResponse.redirect(new URL("/home", request.url));
   }
 
   // Role `user` (akun dasar tanpa bisnis) tidak boleh masuk halaman dashboard —

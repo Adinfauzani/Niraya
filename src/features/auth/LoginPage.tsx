@@ -61,7 +61,7 @@ export function LoginPage() {
   const redirectTo =
     from && from.startsWith('/') && from !== '/login'
       ? from
-      : '/dashboard'
+      : '/home'
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),

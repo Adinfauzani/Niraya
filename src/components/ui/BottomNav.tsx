@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ClipboardList, Home, Search, User } from "lucide-react"
+import { ClipboardList, Home, LogIn, Search, User } from "lucide-react"
 
 import {
   BottomNavigation,
@@ -17,9 +17,9 @@ import {
 import { useAuth } from "@/hooks/useAuth"
 
 /**
- * Rute di dalam aplikasi (dashboard/POS), alur auth, dan storefront/checkout.
- * Bottom nav hanya ditampilkan di halaman publik umum; alur pemesanan/menu
- * punya CTA bawah sendiri agar tidak tertutup/tidak saling tumpang-tindih.
+ * Bottom nav mobile untuk halaman publik umum.
+ * Disembunyikan di rute dashboard/app, alur auth, checkout, dan menu toko
+ * (yang memiliki CTA/bottom bar sendiri) serta pada viewport desktop.
  */
 const HIDE_PREFIXES = [
   "/dashboard",
@@ -43,56 +43,69 @@ const HIDE_PREFIXES = [
   "/forgot-password",
   "/reset-password",
   "/auth",
-] as const;
+] as const
 
 function isHiddenPath(pathname: string): boolean {
+  // Landing marketing page manages its own navigation.
+  if (pathname === "/") return true
   // /orders/me adalah aktivitas pengguna (punya nav ini); /orders lainnya dashboard.
-  if (pathname === "/orders/me" || pathname.startsWith("/orders/me/")) return false;
+  if (pathname === "/orders/me" || pathname.startsWith("/orders/me/")) return false
   if (
     HIDE_PREFIXES.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     )
   ) {
-    return true;
+    return true
   }
   // Checkout & store menu flows have their own bottom CTAs; keep floating nav off them.
-  if (pathname === "/menu/checkout" || pathname.startsWith("/menu/checkout/")) return true;
-  const segs = pathname.split("/").filter(Boolean);
+  if (pathname === "/menu/checkout" || pathname.startsWith("/menu/checkout/")) return true
+  const segs = pathname.split("/").filter(Boolean)
   // /{storeSlug}/menu (public storefront menu)
-  if (segs.length >= 2 && segs[1] === "menu") return true;
-  return false;
+  if (segs.length >= 2 && segs[1] === "menu") return true
+  return false
 }
 
-function getActiveValue(pathname: string): string {
-  if (pathname === "/home" || pathname.startsWith("/home/")) return "home";
-  if (pathname === "/search" || pathname.startsWith("/search/")) return "search";
-  if (pathname === "/orders/me" || pathname.startsWith("/orders/me/")) return "activity";
-  return "none";
+function getActiveValue(pathname: string, authed: boolean): string {
+  if (authed) {
+    if (pathname === "/home" || pathname.startsWith("/home/") || pathname === "/") return "home"
+    if (pathname === "/search" || pathname.startsWith("/search/")) return "search"
+    if (pathname === "/orders/me" || pathname.startsWith("/orders/me/")) return "activity"
+    return "none"
+  }
+  if (pathname === "/home" || pathname.startsWith("/home/")) return "home"
+  if (pathname === "/search" || pathname.startsWith("/search/")) return "search"
+  if (pathname === "/") return "home"
+  return "none"
 }
 
 const itemClassName =
-  "flex h-[3.875rem] w-[4.875rem] flex-col items-center justify-center pt-[5px] data-[minimized]:size-12 data-[minimized]:pt-0";
+  "flex h-[3.875rem] w-[4.875rem] flex-col items-center justify-center pt-[5px] data-[minimized]:size-12 data-[minimized]:pt-0"
 
-const ITEMS = [
+const AUTHED_ITEMS = [
   { value: "home", label: "Beranda", href: "/home", Icon: Home },
   { value: "search", label: "Cari", href: "/search", Icon: Search },
   { value: "activity", label: "Aktivitas", href: "/orders/me", Icon: ClipboardList },
-] as const;
+] as const
 
-const DESKTOP_QUERY = "(min-width: 64rem)";
+const GUEST_ITEMS = [
+  { value: "home", label: "Beranda", href: "/home", Icon: Home },
+  { value: "search", label: "Cari", href: "/search", Icon: Search },
+] as const
+
+const DESKTOP_QUERY = "(min-width: 64rem)"
 
 function subscribeDesktop(callback: () => void) {
-  const mql = window.matchMedia(DESKTOP_QUERY);
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
+  const mql = window.matchMedia(DESKTOP_QUERY)
+  mql.addEventListener("change", callback)
+  return () => mql.removeEventListener("change", callback)
 }
 
 function getDesktopSnapshot() {
-  return window.matchMedia(DESKTOP_QUERY).matches;
+  return window.matchMedia(DESKTOP_QUERY).matches
 }
 
 function getServerSnapshot() {
-  return false;
+  return false
 }
 
 export function BottomNav() {
@@ -104,24 +117,27 @@ export function BottomNav() {
     getServerSnapshot,
   )
 
-  if (isDesktop || isHiddenPath(pathname) || loading || !user) return null;
+  if (isDesktop || isHiddenPath(pathname) || loading) return null
 
-  const activeValue = getActiveValue(pathname);
+  const authed = !!user
+  const items = authed ? AUTHED_ITEMS : GUEST_ITEMS
+  const activeValue = getActiveValue(pathname, authed)
+  const navProps = activeValue === "none" ? {} : { value: activeValue }
 
   return (
     <>
       {/* Spacer agar konten tidak tertutup bottom bar yang fixed. */}
       <div className="h-20" aria-hidden="true" />
       <BottomNavigation
-        value={activeValue === "none" ? undefined : activeValue}
+        {...navProps}
         scrollBehavior="minimize"
         aria-label="Navigasi utama"
         className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit items-center gap-2.5"
       >
         <BottomNavigationHighlight className="absolute inset-x-0 inset-y-1 rounded-full bg-muted">
           <ul className="flex items-center rounded-full bg-background px-1 ring-1 ring-border">
-            {ITEMS.map(({ value, label, href, Icon }) => (
-              <li key={value}>
+            {items.map(({ value, label, href, Icon }) => (
+              <li key={`${value}-${href}-${label}`}>
                 <BottomNavigationHighlightItem value={value}>
                   <BottomNavigationItem value={value} asChild>
                     <Link href={href} aria-label={label} className={itemClassName}>
@@ -138,14 +154,14 @@ export function BottomNav() {
         </BottomNavigationHighlight>
         <BottomNavigationAccessory className="size-[3.875rem] rounded-full bg-background p-1 shadow-lg ring-1 ring-border data-[minimized]:size-12">
           <Link
-            href="/profile"
-            aria-label="Profil"
+            href={authed ? "/profile" : "/login"}
+            aria-label={authed ? "Profil" : "Masuk"}
             className="flex size-full items-center justify-center rounded-full text-muted-foreground outline-none transition-colors duration-300 ease-out hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <User className="size-5" aria-hidden="true" />
+            {authed ? <User className="size-5" aria-hidden="true" /> : <LogIn className="size-5" aria-hidden="true" />}
           </Link>
         </BottomNavigationAccessory>
       </BottomNavigation>
     </>
-  );
+  )
 }

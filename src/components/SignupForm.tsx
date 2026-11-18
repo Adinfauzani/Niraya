@@ -87,10 +87,10 @@ export function SignupForm({
         return
       }
 
-      // Email confirmation required - show success message
       toast.success("Pendaftaran berhasil!", {
         description: "Silakan cek email Anda untuk verifikasi akun.",
       })
+      router.push("/login")
       router.refresh()
     } catch (error) {
       setFormError(

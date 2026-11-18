@@ -6,10 +6,21 @@ dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
 ## [0.1.3] - 2026-11-18
 
+### Ditambahkan
+
+- Halaman discovery `/home` (Niraya Discovery, dapat diakses tamu maupun pengguna login): header brand/lokasi/pencarian/notifikasi/profil, pencarian toko, produk, dan kategori berbasis server (`GET /api/discovery/search`, debounce), navigasi kategori, banner sorotan/promo dari data nyata (toko unggulan/diskon aktif), serta seksi toko pilihan, toko sekitar/jelajahi, produk populer, rekomendasi, dan terbaru dengan state kosong/loading/gagal.
+- Lokasi perangkat real-time (opt-in, `navigator.geolocation.watchPosition`) untuk mengurutkan/menemukan toko dan hasil terdekat di `/home` (fallback bila izin atau lokasi tidak tersedia); jarak menggunakan info lokasi toko/profil yang tersedia.
+- Notifikasi in-app di `/home` (ikon bell) untuk pengguna login dari `audit.notifications` (`GET /api/discovery/notifications`) dengan fallback saat tamu atau tidak ada notifikasi.
+- Halaman detail discovery: `/search/[slug]` (detail toko: info, promo/diskon aktif, kategori, produk) dan `/discovery/product/[id]`; tautan dari `/home` ke detail/menu toko, serta menu toko (`/{storeSlug}/menu`) mendukung deep-link produk `?product=<id>`.
+- Adapter penyimpanan bukti pembayaran S3-compatible privat (SigV4 PUT/GET, tanpa URL publik) di `src/server/storage/PaymentProof.ts` (`PAYMENT_PROOF_STORAGE=s3` + env S3) untuk produksi/Vercel; fail-closed bila belum dikonfigurasi, fallback penyimpanan lokal hanya di luar produksi/Vercel.
+
 ### Diubah
 
 - Alur pemesanan storefront disederhanakan: `/menu/checkout` menjadi satu halaman untuk form checkout dan tampilan pesanan (`?orderId=...`) yang menampilkan status, instruksi transfer/QRIS, unggah bukti, dan ringkasan item; setelah pesanan dibuat pengguna diarahkan ke `/menu/checkout?orderId=...`. Route `/menu/order/[id]` dan `/menu/order/[id]/payment` dialihkan ke `/menu/checkout`, dan tautan detail pesanan pengguna diperbarui.
 - Alur kasir `/orders`: pesanan baru dibuka lewat tombol **Detail** untuk verifikasi data/bukti transfer lalu **Terima/Batalkan** di detail; setelah diterima, progres pesanan ditindaklanjuti dari kartu (**Sedang disiapkan** → **Siap diambil/diantar** → **Selesai**).
+- Routing/auth: landing `/` dapat diakses tamu; pengguna login yang membuka `/` atau halaman auth diarahkan ke `/home` (default setelah login/daftar), dan `/home` menjadi halaman discovery publik. `/orders/me` tetap memerlukan login.
+- Navigasi bawah mobile kini tampil untuk tamu maupun pengguna login pada halaman publik umum (tetap tersembunyi di desktop, saat loading, `/`, rute dashboard/app/auth, `/menu/checkout`, dan `/{storeSlug}/menu`): tamu (Beranda `/home`, Cari `/search`, Masuk `/login`), login (Beranda `/home`, Cari `/search`, Aktivitas `/orders/me`, Profil `/profile`).
+- Navbar `/home` menggunakan logo `public/Logo.png`.
 
 ### Diperbaiki
 

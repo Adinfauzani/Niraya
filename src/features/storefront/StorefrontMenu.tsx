@@ -243,6 +243,7 @@ export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | nu
   const [dNotes, setDNotes] = useState("");
   const [cartPulse, setCartPulse] = useState(false);
   const prevCount = useRef(0);
+  const deepLinked = useRef<string | null>(null);
 
   useEffect(() => {
     let on = true;
@@ -284,6 +285,17 @@ export function StorefrontMenu({ storeId: storeIdProp }: { storeId?: string | nu
 
   const categories = data?.catalog.categories || [];
   const categoryName = (id?: string | null) => categories.find((c) => c.id === id)?.name || "Menu";
+
+  useEffect(() => {
+    const pid = searchParams.get("product");
+    if (!pid || !data?.catalog.products?.length) return;
+    if (deepLinked.current === pid) return;
+    const p = data.catalog.products.find((x) => x.id === pid);
+    if (p) {
+      deepLinked.current = pid;
+      openDetail(p);
+    }
+  }, [data, searchParams]);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (data?.catalog.products || []).filter((p) =>
