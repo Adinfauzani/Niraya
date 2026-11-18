@@ -99,9 +99,8 @@ function encodeKeyPath(key: string) {
 function buildObjectUrl(cfg: S3Config, key: string) {
   const base = new URL(cfg.endpoint);
   const basePath = base.pathname.replace(/\/+$/, "");
-  base.pathname = `${basePath}/${encodeRfc3986(cfg.bucket)}/${encodeKeyPath(key)}`;
-  base.search = "";
-  return base;
+  const canonicalUri = `${basePath}/${encodeRfc3986(cfg.bucket)}/${encodeKeyPath(key)}`;
+  return { href: `${base.origin}${canonicalUri}`, host: base.host, canonicalUri };
 }
 
 async function signedS3Request(
@@ -110,14 +109,12 @@ async function signedS3Request(
   key: string,
   opts?: { body?: Uint8Array; contentType?: string },
 ): Promise<Response> {
-  const url = buildObjectUrl(cfg, key);
+  const { href, host, canonicalUri } = buildObjectUrl(cfg, key);
   const body = opts?.body;
   const payloadHash = hashHex(body ?? "");
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
   const dateStamp = amzDate.slice(0, 8);
-  const host = url.host;
-  const canonicalUri = url.pathname;
   const canonicalQuery = "";
 
   const headers: Record<string, string> = {
@@ -150,7 +147,7 @@ async function signedS3Request(
   };
   if (opts?.contentType) reqHeaders["Content-Type"] = opts.contentType;
 
-  return fetch(url.toString(), {
+  return fetch(href, {
     method,
     headers: reqHeaders,
     body: body as any,
