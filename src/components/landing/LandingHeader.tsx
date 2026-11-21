@@ -33,7 +33,7 @@ export function LandingHeader() {
       transition={{ duration: 0.3, ease: EASE }}
       className="fixed inset-x-0 top-0 z-[70] px-3 pt-3"
     >
-      <div className="mx-auto flex h-12 w-full max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border bg-background/80 p-1.5 shadow-lg shadow-foreground/5 backdrop-blur-md sm:gap-2 sm:pe-3 sm:ps-5">
+      <div className="mx-auto flex h-12 w-full max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border bg-background/80 p-1.5 shadow-lg shadow-foreground/5 backdrop-blur-md sm:max-w-3xl sm:gap-2 sm:pe-3 sm:ps-5">
         <Link href="/" aria-label="Niraya POS" className="flex items-center">
           <Image
             src="/Niraya.webp"
