@@ -33,7 +33,7 @@ export function LandingHeader() {
       transition={{ duration: 0.3, ease: EASE }}
       className="fixed inset-x-0 top-0 z-[70] px-3 pt-3"
     >
-      <div className="mx-auto flex h-12 w-full max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border bg-background/80 p-1.5 shadow-lg shadow-foreground/5 backdrop-blur-md sm:w-fit sm:gap-2 sm:pe-1.5 sm:ps-4">
+      <div className="mx-auto flex h-12 w-full max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border bg-background/80 p-1.5 shadow-lg shadow-foreground/5 backdrop-blur-md sm:gap-2 sm:pe-3 sm:ps-5">
         <Link href="/" aria-label="Niraya POS" className="flex items-center">
           <Image
             src="/Niraya.webp"
@@ -45,8 +45,8 @@ export function LandingHeader() {
           />
         </Link>
 
-        <div className="hidden items-center gap-1 sm:flex sm:gap-1">
-          <nav className="mr-1 hidden items-center sm:flex sm:mr-1">
+        <div className="hidden flex-1 items-center justify-between gap-1 sm:flex sm:gap-1">
+          <nav className="hidden items-center sm:flex sm:mr-1">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.url}
@@ -57,22 +57,24 @@ export function LandingHeader() {
               </Link>
             ))}
           </nav>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="hidden h-8 rounded-full px-3 sm:inline-flex"
-          >
-            <Link href="/login">Masuk</Link>
-          </Button>
-          <Button
-            asChild
-            size="sm"
-            className="h-8 rounded-full bg-blue-600 px-4 text-white hover:bg-blue-600/90"
-          >
-            <Link href="/register">Daftar</Link>
-          </Button>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="hidden h-8 rounded-full px-3 sm:inline-flex"
+            >
+              <Link href="/login">Masuk</Link>
+            </Button>
+            <Button
+              asChild
+              size="sm"
+              className="h-8 rounded-full bg-blue-600 px-4 text-white hover:bg-blue-600/90"
+            >
+              <Link href="/register">Daftar</Link>
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </motion.header>
