@@ -219,6 +219,7 @@ export const operationalSettingsSchema = z.object({
   memberDiscountRatePercent: percentageSchema,
   lowStockThreshold: z.number().int().min(0).max(100000),
   reservationExpiryMinutes: z.number().int().min(5).max(1440),
+  paymentExpiryMinutes: z.number().int().min(5).max(1440),
   autoCancelUnpaidOrders: z.boolean().default(true),
   allowSplitPayment: z.boolean().default(true),
 });

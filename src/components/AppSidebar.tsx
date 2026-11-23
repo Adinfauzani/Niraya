@@ -70,14 +70,25 @@ export function AppSidebar({
   const businessLogoUrl = currentBusiness?.logoUrl ?? null
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ sales: true, catalog: true, business: true })
 
+  const ROLE_ALLOWED: Record<string, string[]> = {
+    user: [],
+    cashier: ["/dashboard", "/pos", "/orders", "/transactions", "/customers"],
+    manager: ["/dashboard", "/pos", "/orders", "/transactions", "/customers", "/products", "/categories", "/inventory"],
+    admin: ["/dashboard", "/pos", "/orders", "/transactions", "/customers", "/products", "/categories", "/inventory", "/reports", "/staff"],
+    owner: ["/dashboard", "/pos", "/orders", "/transactions", "/customers", "/products", "/categories", "/inventory", "/reports", "/staff"],
+  }
+  const allowed = ROLE_ALLOWED[userRole ?? "user"] ?? []
+
   const filteredNav = isRegularUser
     ? []
     : NAV.map((group) => ({
         ...group,
-        items: group.items.map((item) =>
-          item.href === "/orders" ? { ...item, badge: pendingOrders } : item,
-        ),
-      }))
+        items: group.items
+          .filter((item) => allowed.includes(item.href))
+          .map((item) =>
+            item.href === "/orders" ? { ...item, badge: pendingOrders } : item,
+          ),
+      })).filter((group) => group.items.length > 0)
 
   useEffect(() => {
     if (typeof window === "undefined") return

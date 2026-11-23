@@ -50,9 +50,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isProfileRoute = pathname === "/profile" || pathname.startsWith("/(profile)") || pathname.startsWith("/profile") || pathname.startsWith("/user-profile")
   const isOnboardingRoute =
     pathname === "/onboarding" ||
-    pathname.startsWith("/onboarding/") ||
-    pathname === "/dashboard/onboarding" ||
-    pathname.startsWith("/dashboard/onboarding/")
+    pathname.startsWith("/onboarding/")
   const isOrdersMeRoute = pathname === "/orders/me" || pathname.startsWith("/orders/me/")
 
   useEffect(() => {

@@ -10,14 +10,13 @@ import { useDocsLayout } from "fumadocs-ui/layouts/docs"
 
 export function DocsHeaderBar() {
   const { slots } = useDocsLayout()
-
   return (
-    <header className="[grid-area:header] sticky top-(--fd-docs-row-1) z-30 flex h-(--fd-header-height) items-center gap-1.5 border-b bg-background/80 ps-2.5 pe-2 backdrop-blur-sm max-md:layout:[--fd-header-height:--spacing(14)] md:layout:[--fd-header-height:--spacing(12)]">
+    <header className="[grid-area:header] sticky top-(--fd-docs-row-1) z-30 flex h-(--fd-header-height) items-center gap-2 bg-background/80 px-3 backdrop-blur-sm max-md:layout:[--fd-header-height:--spacing(14)] md:layout:[--fd-header-height:--spacing(12)]">
       <slots.sidebar.trigger
         className={buttonVariants({
           variant: "ghost",
           size: "icon-sm",
-          className: "p-2 lg:hidden",
+          className: "p-2",
         })}
       >
         <SidebarIcon className="size-5" />
@@ -26,7 +25,7 @@ export function DocsHeaderBar() {
       <Link
         href="/"
         aria-label="Niraya POS"
-        className="flex shrink-0 items-center lg:hidden"
+        className="flex shrink-0 items-center"
       >
         <Image
           src="/Niraya.webp"
@@ -41,13 +40,13 @@ export function DocsHeaderBar() {
       {slots.searchTrigger ? (
         <slots.searchTrigger.sm
           hideIfDisabled
-          className="ms-auto p-2 lg:hidden"
+          className="ms-auto p-2"
         />
       ) : null}
 
       <Link
         href="/"
-        className="inline-flex h-8 shrink-0 items-center rounded-md bg-primary px-2.5 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/85 sm:px-3 sm:text-sm lg:ms-auto"
+        className="hidden shrink-0 items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85 sm:inline-flex"
       >
         Buka aplikasi
       </Link>

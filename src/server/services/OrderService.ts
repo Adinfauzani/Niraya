@@ -55,6 +55,8 @@ export async function listOrders(options: {
   businessId: string;
   storeId: string;
   status?: string | null;
+  from?: string | null;
+  to?: string | null;
   limit?: number;
 }): Promise<Order[]> {
   const { businessId, storeId } = options;
@@ -65,6 +67,12 @@ export async function listOrders(options: {
   ];
   if (options.status && options.status !== "all" && isOrderStatus(options.status)) {
     conditions.push(eq(orders.orderStatus, options.status));
+  }
+  if (options.from) {
+    conditions.push(sql`${orders.createdAt} >= ${new Date(options.from + 'T00:00:00').toISOString()}`);
+  }
+  if (options.to) {
+    conditions.push(sql`${orders.createdAt} <= ${new Date(options.to + 'T23:59:59.999').toISOString()}`);
   }
 
   const limit = Math.min(Math.max(options.limit ?? 100, 1), 200);
@@ -138,8 +146,21 @@ export async function listOrders(options: {
 export async function getOrderCounts(options: {
   businessId: string;
   storeId: string;
+  from?: string | null;
+  to?: string | null;
 }): Promise<OrderCounts> {
   const { businessId, storeId } = options;
+
+  const conditions = [
+    eq(orders.businessId, businessId),
+    eq(orders.storeId, storeId),
+  ];
+  if (options.from) {
+    conditions.push(sql`${orders.createdAt} >= ${new Date(options.from + 'T00:00:00').toISOString()}`);
+  }
+  if (options.to) {
+    conditions.push(sql`${orders.createdAt} <= ${new Date(options.to + 'T23:59:59.999').toISOString()}`);
+  }
 
   const rows = await db
     .select({
@@ -147,7 +168,7 @@ export async function getOrderCounts(options: {
       count: sql<number>`count(*)::int`,
     })
     .from(orders)
-    .where(and(eq(orders.businessId, businessId), eq(orders.storeId, storeId)))
+    .where(and(...conditions))
     .groupBy(orders.orderStatus);
 
   const counts: OrderCounts = {

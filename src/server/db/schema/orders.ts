@@ -118,7 +118,7 @@ export const orders = s.table(
     ),
     check(
       "Orders_PaymentStatus_check",
-      sql`${t.paymentStatus} in ('UNPAID','PENDING','PAID','FAILED','EXPIRED','PARTIALLY_REFUNDED','REFUNDED')`
+      sql`${t.paymentStatus} in ('UNPAID','PENDING','PAID','FAILED','EXPIRED','PARTIALLY_REFUNDED','REFUNDED','AWAITING_VERIFICATION')`
     ),
   ]
 );

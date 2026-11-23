@@ -31,7 +31,7 @@ export function DashboardClientPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.needsOnboarding === true) {
-            router.replace("/dashboard/onboarding");
+            router.replace("/onboarding");
             return;
           }
         } else if (res.status === 401) {

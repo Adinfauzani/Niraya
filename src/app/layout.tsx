@@ -62,8 +62,8 @@ const jetBrainsMono = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
-  title: "Niraya POS",
-  description: "Niraya POS - Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
+  title: "Niraya",
+  description: "Niraya - Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
   openGraph: {
     title: "Niraya POS",
     description: "Sistem kasir untuk warung, kafe, dan toko. Kelola katalog, transaksi, stok, dan operasional harian.",
@@ -100,7 +100,7 @@ export default function RootLayout({
           // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var t=localStorage.getItem('niraya-theme');var p=window.location.pathname;var l=p==='/'||/^\\/(docs|plans|login|register|signup)(\\/|$)/.test(p);var d=!l&&(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches));var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();",
+                             "(function(){try{var t=localStorage.getItem('niraya-theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();",
           }}
         />
         <link rel="icon" href="/favicon/favicon.ico" sizes="any" />

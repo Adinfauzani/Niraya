@@ -105,6 +105,7 @@ export type OrderPaymentStatus =
   | 'EXPIRED'
   | 'PARTIALLY_REFUNDED'
   | 'REFUNDED'
+  | 'AWAITING_VERIFICATION'
 
 export type OrderSource = 'POS' | 'STOREFRONT' | 'QR_TABLE' | 'QR_GENERAL'
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Ban,
+  Calendar,
   CheckCircle2,
   ChefHat,
   Clock,
@@ -149,12 +150,16 @@ function methodLabel(method: string | null | undefined) {
 
 export function OrdersPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
+  const [dateFilter, setDateFilter] = useState<string>(() => {
+    const d = new Date()
+    return d.toISOString().split('T')[0]
+  })
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detail, setDetail] = useState<OrderDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
-  const { orders, counts, loading, error, refresh } = useOrders(filter)
+  const { orders, counts, loading, error, refresh } = useOrders(filter, 15000, dateFilter || null)
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true)
@@ -218,10 +223,21 @@ export function OrdersPage() {
         title="Pesanan"
         description="Pesanan masuk dari storefront dan QR. Lihat detail & bukti transfer, terima, proses, lalu tandai selesai."
         actions={
-          <Button variant="outline" size="sm" onClick={() => void refresh()}>
-            <RefreshCw className="size-4" />
-            Muat ulang
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-2 py-1 text-xs sm:text-sm">
+              <Calendar className="size-3.5 text-muted-foreground" />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="h-7 bg-transparent border-none px-1 focus:ring-0 outline-none text-sm sm:text-sm"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void refresh()}>
+              <RefreshCw className="size-4" />
+              Muat ulang
+            </Button>
+          </div>
         }
       />
 

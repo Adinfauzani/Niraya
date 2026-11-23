@@ -14,7 +14,7 @@ type OrdersState = {
  * Polls `GET /api/orders` for the current tenant, optionally filtered by
  * status. Refreshes on an interval and when the filter changes.
  */
-export function useOrders(status: string = 'all', intervalMs = 15000) {
+export function useOrders(status: string = 'all', intervalMs = 15000, dateFilter: string | null = null) {
   const [orders, setOrders] = useState<Order[]>([])
   const [counts, setCounts] = useState<OrderCounts | null>(null)
   const [loading, setLoading] = useState(true)
@@ -24,7 +24,14 @@ export function useOrders(status: string = 'all', intervalMs = 15000) {
   const refresh = useCallback(async () => {
     const id = ++requestId.current
     try {
-      const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : ''
+      const params: string[] = []
+      if (status && status !== 'all') {
+        params.push(`status=${encodeURIComponent(status)}`)
+      }
+      if (dateFilter) {
+        params.push(`from=${encodeURIComponent(dateFilter)}&to=${encodeURIComponent(dateFilter)}`)
+      }
+      const query = params.length ? `?${params.join('&')}` : ''
       const response = await fetch(`/api/orders${query}`, {
         cache: 'no-store',
         credentials: 'include',
@@ -45,7 +52,7 @@ export function useOrders(status: string = 'all', intervalMs = 15000) {
     } finally {
       if (id === requestId.current) setLoading(false)
     }
-  }, [status])
+  }, [status, dateFilter])
 
   useEffect(() => {
     void refresh()

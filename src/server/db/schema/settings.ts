@@ -334,6 +334,9 @@ export const operationalSettings = s.table(
     reservationExpiryMinutes: integer("ReservationExpiryMinutes")
       .notNull()
       .default(30),
+    paymentExpiryMinutes: integer("PaymentExpiryMinutes")
+      .notNull()
+      .default(10),
     autoCancelUnpaidOrders: boolean("AutoCancelUnpaidOrders").notNull().default(true),
     allowSplitPayment: boolean("AllowSplitPayment").notNull().default(true),
     createdAt: timestamp("CreatedAt", { withTimezone: true })

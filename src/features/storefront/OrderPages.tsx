@@ -47,6 +47,7 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [ref, setRef] = useState("");
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -170,6 +171,22 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
   const instr = order.payment?.instructions;
   const { paid, rejected, inactive, proofSubmitted, awaiting, canUpload } = flags;
 
+  useEffect(() => {
+    const expiresAt = order?.payment?.expiresAt;
+    if (!expiresAt || paid || rejected || inactive || proofSubmitted) {
+      setCountdown(null);
+      return;
+    }
+    const end = new Date(expiresAt).getTime();
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      setCountdown(remaining);
+    };
+    const interval = setInterval(tick, 1000);
+    tick();
+    return () => clearInterval(interval);
+  }, [order, paid, rejected, inactive, proofSubmitted]);
+
   return (
     <>
       <TopDesktopNav />
@@ -210,6 +227,16 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
                     Bayar: {order.paymentStatus}
                   </Badge>
                 </div>
+                {countdown !== null && !paid && !rejected && !inactive && !proofSubmitted ? (
+                  <div className="mt-2 flex items-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] px-3 py-2 text-xs">
+                    <Clock3 className="size-3.5 shrink-0 text-blue-600" />
+                    <span className="font-medium text-blue-700 dark:text-blue-400">
+                      {countdown > 0
+                        ? `Waktu tersisa untuk mengunggah bukti: ${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")}`
+                        : "Waktu habis. Pesanan akan dibatalkan otomatis."}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </Card>

@@ -4,6 +4,28 @@ Semua perubahan penting pada Niraya POS dicatat di berkas ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/)
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.1.4] - 2026-11-23
+
+### Ditambahkan
+
+- Auto-cancel pesanan belum dibayar dengan countdown timer dan status `AWAITING_VERIFICATION`.
+- Onboarding mandiri (`/onboarding`) dengan pilihan buat usaha baru atau gabung dengan kode toko, verifikasi kode real-time.
+- Keterangan role & batas akses di Staff Management dalam dialog responsif.
+- Halaman `/home` discovery dengan background `world.svg`.
+
+### Diubah
+
+- Sidebar navigasi menyembunyikan item yang tidak dapat diakses sesuai role pengguna.
+- Opsi role "user" dihapus dari dropdown filter/edit staff.
+- Theme light/dark diterapkan di semua halaman (LIGHT_ONLY_PATHS dikosongkan).
+- Redirect auth: pengguna login diarahkan ke `/home`; `/docs` redirect ke `/home`.
+- Docs sidebar dibersihkan (border/toggle dihapus, theme-aware).
+
+### Dihapus
+
+- Teks "Keterangan role & batas akses" dan "Klik untuk melihat..." diganti ikon info saja.
+- Box/kartu pembungkus ikon info di Staff Management.
+
 ## [0.1.3.1a] - 2026-11-18
 
 ### Ditambahkan

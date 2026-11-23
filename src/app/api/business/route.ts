@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getBusinessData } from "@/server/business/service";
+import { getBusinessData, mutateBusiness } from "@/server/business/service";
 import {
   createCategory,
   updateCategory,
@@ -205,7 +205,7 @@ export async function POST(request: Request) {
     }
 
     const payload = body?.payload ?? {};
-    let result: { ok: true };
+    let result: { ok: boolean };
 
     switch (action) {
       case "category.create":
@@ -329,6 +329,13 @@ export async function POST(request: Request) {
           changedByRole: (user as any)?.role ?? null,
           reason: payload.reason,
         });
+        break;
+      case "qr.payment.verify":
+        result = await mutateBusiness("qr.payment.verify", {
+          paymentId: payload.paymentId,
+          action: payload.action,
+          reason: payload.reason,
+        }, { businessId: resolvedBusinessId, storeId: resolvedStoreId, actingUserId: user.id, actingUserRole: (user as any)?.role });
         break;
       case "store.create":
         result = await createStore(resolvedBusinessId, {

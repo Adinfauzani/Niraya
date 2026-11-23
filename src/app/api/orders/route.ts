@@ -48,6 +48,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
   const summaryOnly = searchParams.get("summary") === "1";
   const limit = Number(searchParams.get("limit") ?? 100);
 
@@ -55,6 +57,8 @@ export async function GET(request: Request) {
     const counts = await getOrderCounts({
       businessId: context.businessId,
       storeId: context.storeId,
+      from,
+      to,
     });
 
     if (summaryOnly) {
@@ -65,6 +69,8 @@ export async function GET(request: Request) {
       businessId: context.businessId,
       storeId: context.storeId,
       status,
+      from,
+      to,
       limit: Number.isFinite(limit) ? limit : 100,
     });
 

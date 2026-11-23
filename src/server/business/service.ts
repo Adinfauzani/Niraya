@@ -27,6 +27,7 @@ import {
   stores,
 } from "@/server/db/schema";
 import { checkUserLimit, checkStoreLimit, assertProductLimitInTx } from "@/server/entitlements/check";
+import { verifyManualPayment } from "@/server/storefront/payments";
 
 const money = (value: number) => value.toFixed(2);
 const number = (value: string | null | undefined) => Number(value ?? 0);
@@ -848,6 +849,15 @@ export async function mutateBusiness(
           .where(eq(transactions.id, id));
       });
 
+      return { ok: true };
+    }
+
+    case "qr.payment.verify": {
+      const paymentId = requiredId(payload.paymentId, "ID pembayaran");
+      const action = String(payload.action || "APPROVE") as "APPROVE" | "REJECT";
+      const reason = payload.reason ?? null;
+
+      await verifyManualPayment({ paymentId, action, actorUserId: actingUserId ?? "", reason });
       return { ok: true };
     }
 

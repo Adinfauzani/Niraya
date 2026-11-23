@@ -199,3 +199,10 @@
     --plans-button-ink: oklch(0.13 0.02 155);
   }
 }
+
+
+/* Docs sidebar (no border) */
+#nd-sidebar {
+  border-inline-end: 0 !important;
+  border-right: 0 !important;
+}

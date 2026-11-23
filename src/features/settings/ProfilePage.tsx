@@ -155,7 +155,7 @@ export function ProfilePage() {
           </div>
           <div className="hidden items-center gap-2 sm:flex">
             <Button asChild variant="outline" className="rounded-xl"><Link href="/plans">Plans</Link></Button>
-            {canAccessDashboard ? <Button asChild variant="outline" className="rounded-xl"><Link href="/dashboard"><LayoutDashboardIcon className="size-4" aria-hidden />Dashboard</Link></Button> : <Button asChild className="rounded-xl"><Link href="/dashboard/onboarding"><StoreIcon className="size-4" aria-hidden />Buka usaha</Link></Button>}
+            {canAccessDashboard ? <Button asChild variant="outline" className="rounded-xl"><Link href="/dashboard"><LayoutDashboardIcon className="size-4" aria-hidden />Dashboard</Link></Button> : <Button asChild className="rounded-xl"><Link href="/onboarding"><StoreIcon className="size-4" aria-hidden />Buka usaha</Link></Button>}
             <PublicNavigation variant="desktop" />
           </div>
         </header>
@@ -271,7 +271,7 @@ export function ProfilePage() {
                   </Button>
                 ) : (
                   <Button asChild className="w-full rounded-xl">
-                    <Link href="/dashboard/onboarding"><StoreIcon className="size-4" aria-hidden />Buka usaha sekarang</Link>
+                    <Link href="/onboarding"><StoreIcon className="size-4" aria-hidden />Buka usaha sekarang</Link>
                   </Button>
                 )}
                 {isEditing ? (
@@ -317,7 +317,7 @@ export function ProfilePage() {
                 </CardHeader>
                 <CardContent>
                   <Button asChild className="w-full rounded-xl">
-                    <Link href="/dashboard/onboarding">
+                    <Link href="/onboarding">
                       <StoreIcon className="size-4" aria-hidden />
                       Buka usaha sekarang
                     </Link>

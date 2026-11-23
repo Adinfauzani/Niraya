@@ -231,6 +231,7 @@ export async function updateSession(request: NextRequest) {
     ...dashboardPagePaths,
     "/onboarding",
     "/orders/me",
+    "/docs",
     "/api/business",
     "/api/pos",
     "/api/staff",
@@ -276,8 +277,7 @@ export async function updateSession(request: NextRequest) {
       matchesPrefix(request.nextUrl.pathname, path)
     );
     const isOnboardingFlow =
-      matchesPrefix(request.nextUrl.pathname, "/onboarding") ||
-      matchesPrefix(request.nextUrl.pathname, "/dashboard/onboarding");
+      matchesPrefix(request.nextUrl.pathname, "/onboarding");
     if (
       isDashboardPage &&
       !isOnboardingFlow &&

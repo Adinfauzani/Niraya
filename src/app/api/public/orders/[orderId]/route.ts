@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
   }
   if (!authorized) return NextResponse.json({ error: "Akses tidak valid." }, { status: 403 });
   const items = await db.select({ productName: orderItems.productName, variantName: orderItems.variantName, quantity: orderItems.quantity, unitPrice: orderItems.unitPrice, subtotal: orderItems.subtotal, notes: orderItems.notes }).from(orderItems).where(eq(orderItems.orderId, orderId));
-  const [pay] = await db.select({ id: payments.id, status: payments.status, method: payments.paymentMethod, amount: payments.amount, proofSubmittedAt: payments.proofSubmittedAt, referenceNumber: payments.referenceNumber }).from(payments).where(eq(payments.orderId, orderId)).limit(1);
+  const [pay] = await db.select({ id: payments.id, status: payments.status, method: payments.paymentMethod, amount: payments.amount, proofSubmittedAt: payments.proofSubmittedAt, referenceNumber: payments.referenceNumber, expiresAt: payments.expiresAt }).from(payments).where(eq(payments.orderId, orderId)).limit(1);
   const [ps] = await db.select().from(paymentSettings).where(eq(paymentSettings.businessId, order.businessId)).limit(1);
   const [legacy] = await db.select().from(businessSettings).where(eq(businessSettings.id, "default")).limit(1);
   const src = String(order.orderSource);
@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
   return NextResponse.json({ order: {
     id: order.id, orderNumber: order.orderNumber, orderSource: publicSource, orderStatus: order.orderStatus, paymentStatus: order.paymentStatus,
     customerName: order.customerName, tableNumber: isQrTable ? order.tableNumber : null, totals: { subtotal: Number(order.subtotal), tax: Number(order.taxTotal), total: Number(order.grandTotal), currency: order.currency },
-    items: items.map(i=>({...i, unitPrice:Number(i.unitPrice), subtotal:Number(i.subtotal)})), payment: pay ? { id: pay.id, status: pay.status, method: pay.method, amount: Number(pay.amount), proofSubmitted: !!pay.proofSubmittedAt, referenceNumber: pay.referenceNumber || null, instructions: instr } : null,
+    items: items.map(i=>({...i, unitPrice:Number(i.unitPrice), subtotal:Number(i.subtotal)})),     payment: pay ? { id: pay.id, status: pay.status, method: pay.method, amount: Number(pay.amount), proofSubmitted: !!pay.proofSubmittedAt, referenceNumber: pay.referenceNumber || null, expiresAt: pay.expiresAt?.toISOString() ?? null, instructions: instr } : null,
     createdAt: order.createdAt, submittedAt: order.submittedAt, paidAt: order.paidAt,
   }});
 }

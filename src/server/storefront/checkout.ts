@@ -14,6 +14,8 @@ import {
   productVariants,
   stores,
   taxRates,
+  transactions,
+  transactionItems,
 } from "@/server/db/schema";
 import { createGuestAccessInTx } from "@/server/storefront/GuestAccess";
 
@@ -47,6 +49,10 @@ function generateOrderNumber() {
   const d = new Date(); const y = d.getFullYear().toString().slice(-2); const m = String(d.getMonth()+1).padStart(2,"0"); const day = String(d.getDate()).padStart(2,"0");
   return `WB-${y}${m}${day}-${Math.random().toString(36).substring(2,8).toUpperCase()}`;
 }
+function generateTransactionNumber() {
+  const d = new Date(); const y = d.getFullYear().toString().slice(-2); const m = String(d.getMonth()+1).padStart(2,"0"); const day = String(d.getDate()).padStart(2,"0");
+  return `TRX-SF-${y}${m}${day}-${Math.random().toString(36).substring(2,8).toUpperCase()}`;
+}
 export function hashStorefrontRequest(input: StorefrontCheckoutInput) {
   const items = [...input.items].sort((a,b)=> (a.productId+(a.variantId||'')).localeCompare(b.productId+(b.variantId||'')));
   return crypto.createHash("sha256").update(JSON.stringify({
@@ -62,7 +68,8 @@ async function loadCheckoutSettings(tx: any, businessId: string) {
       select
         coalesce(ps."QrManualTransferEnabled", bs."QrManualTransferEnabled", false) as manual,
         coalesce(os."TaxRate", bs."TaxRate") as tax_rate,
-        coalesce(os."ReservationExpiryMinutes", bs."ReservationExpiryMinutes", 30) as expiry,
+        coalesce(os."ReservationExpiryMinutes", bs."ReservationExpiryMinutes", 30) as reservation_expiry,
+        coalesce(os."PaymentExpiryMinutes", bs."PaymentExpiryMinutes", 10) as payment_expiry,
         coalesce(ps."ManualTransferBankName", bs."ManualTransferBankName") as bank,
         coalesce(ps."ManualTransferAccountName", bs."ManualTransferAccountName") as acc_name,
         coalesce(ps."ManualTransferAccountNumber", bs."ManualTransferAccountNumber") as acc_no,
@@ -79,19 +86,20 @@ async function loadCheckoutSettings(tx: any, businessId: string) {
     if (r) return {
       manualTransferEnabled: !!r.manual,
       taxRate: r.tax_rate != null ? Number(r.tax_rate) : null,
-      expiryMinutes: r.expiry != null ? Number(r.expiry) : 30,
+      reservationExpiryMinutes: r.reservation_expiry != null ? Number(r.reservation_expiry) : 30,
+      paymentExpiryMinutes: r.payment_expiry != null ? Number(r.payment_expiry) : 10,
       instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null, qrisImageUrl: r.qris_image ?? null },
     };
   } catch {
     try {
-      const rows = await tx.execute(sql`select "QrManualTransferEnabled" as manual, "TaxRate" as tax_rate, "ReservationExpiryMinutes" as expiry, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions, "ManualTransferQrisImageUrl" as qris_image from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
+      const rows = await tx.execute(sql`select "QrManualTransferEnabled" as manual, "TaxRate" as tax_rate, "ReservationExpiryMinutes" as reservation_expiry, "PaymentExpiryMinutes" as payment_expiry, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions, "ManualTransferQrisImageUrl" as qris_image from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
       const r = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
-      if (r) return { manualTransferEnabled: !!r.manual, taxRate: r.tax_rate != null ? Number(r.tax_rate) : null, expiryMinutes: r.expiry != null ? Number(r.expiry) : 30, instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null, qrisImageUrl: r.qris_image ?? null } };
+      if (r) return { manualTransferEnabled: !!r.manual, taxRate: r.tax_rate != null ? Number(r.tax_rate) : null, reservationExpiryMinutes: r.reservation_expiry != null ? Number(r.reservation_expiry) : 30, paymentExpiryMinutes: r.payment_expiry != null ? Number(r.payment_expiry) : 10, instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null, qrisImageUrl: r.qris_image ?? null } };
     } catch {}
   }
   // Default aktif bila setting belum dibuat, agar checkout storefront langsung
   // dapat digunakan. Bisnis dapat menonaktifkannya lewat "Transfer manual".
-  return { manualTransferEnabled: true, taxRate: null, expiryMinutes: 30, instructions: { bankName: null, accountName: null, accountNumber: null, instructions: null, qrisImageUrl: null } };
+  return { manualTransferEnabled: true, taxRate: null, reservationExpiryMinutes: 30, paymentExpiryMinutes: 10, instructions: { bankName: null, accountName: null, accountNumber: null, instructions: null, qrisImageUrl: null } };
 }
 
 /** Direct public storefront checkout. No QR token, no dining table context. DiningTableId always NULL.
@@ -137,44 +145,76 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
       items.push({ productId:p.id, variantId: it.variantId||null, productName:p.name, sku:p.sku, variantName: variant?.name??null, quantity:it.quantity, unitPrice:unit, lineTotal:line, notes: it.notes||null, product:p, inv });
     }
     subtotal = roundMoney(subtotal); const tax = roundMoney(subtotal * taxRate); const total = roundMoney(subtotal + tax);
-    const now = new Date(); const expiryMin = Math.max(5, settings.expiryMinutes || 30);
-    const expiresAt = new Date(now.getTime() + expiryMin*60000);
+    const now = new Date();
+    const reservationExpiryMin = Math.max(5, settings.reservationExpiryMinutes || 30);
+    const paymentExpiryMin = Math.max(5, settings.paymentExpiryMinutes || 10);
+    const reservationExpiresAt = new Date(now.getTime() + reservationExpiryMin * 60000);
+    const paymentExpiresAt = new Date(now.getTime() + paymentExpiryMin * 60000);
     const orderId = crypto.randomUUID(); const orderNumber = generateOrderNumber();
     const paymentId = crypto.randomUUID();
+    const transactionId = crypto.randomUUID();
+    const transactionNumber = generateTransactionNumber();
     const orderSource = "QR_GENERAL"; // DB CHECK compat; DiningTableId NULL => storefront
     const authUserId = input.customer.mode === "authenticated" ? String(input.customer.authUserId) : null;
+    await tx.insert(transactions).values({
+      id: transactionId,
+      businessId: defaultBusinessId,
+      storeId: defaultStoreId,
+      transactionNumber,
+      cashierId: null,
+      cashierName: input.customer.name.trim(),
+      customerId: null,
+      customerName: input.customer.name.trim(),
+      orderType: input.orderType || "takeaway",
+      tableNumber: null,
+      paymentMethod: "manual_transfer",
+      paymentStatus: "unpaid",
+      taxRateId: null,
+      subtotal: subtotal.toFixed(2),
+      discountTotal: "0.00",
+      taxTotal: tax.toFixed(2),
+      grandTotal: total.toFixed(2),
+      amountPaid: null,
+      changeAmount: null,
+      status: "completed",
+      createdAt: now,
+      updatedAt: now,
+    } as any);
     await tx.insert(orders).values({
       id: orderId, businessId: defaultBusinessId, storeId: defaultStoreId, orderNumber, orderSource, orderStatus: "SUBMITTED", paymentStatus: "PENDING",
       diningTableId: null, customerId: null, // FK points to customers.Customers.id; auth ownership tracked in orderStatusHistory
       customerName: input.customer.name.trim(), customerPhone: input.customer.phone.trim(), orderType: input.orderType || "takeaway",
       tableNumber: null, paymentMethod: "manual_transfer", currency:"IDR", subtotal: subtotal.toFixed(2), discountTotal:"0.00", taxTotal: tax.toFixed(2), grandTotal: total.toFixed(2),
-      idempotencyKey: input.idempotencyKey, notes: input.notes||null, submittedAt: now, createdAt: now, updatedAt: now,
+      amountPaid: null, changeAmount: null,
+      idempotencyKey: input.idempotencyKey, notes: input.notes||null, linkedTransactionId: transactionId,
+      submittedAt: now, createdAt: now, updatedAt: now,
     } as any);
     for (const it of items) {
       const orderItemId = crypto.randomUUID();
       await tx.insert(orderItems).values({ id: orderItemId, orderId, productId: it.productId, productVariantId: it.variantId, productName: it.productName, sku: it.sku, variantName: it.variantName, quantity: it.quantity, unitPrice: it.unitPrice.toFixed(2), discountTotal:"0.00", taxTotal:"0.00", subtotal: it.lineTotal.toFixed(2), notes: it.notes, createdAt: now } as any);
+      await tx.insert(transactionItems).values({ id: crypto.randomUUID(), transactionId, productId: it.productId, productVariantId: it.variantId, productName: it.productName, sku: it.sku, quantity: it.quantity, unitPrice: it.unitPrice.toFixed(2), discountTotal: "0.00", taxTotal: "0.00", lineTotal: it.lineTotal.toFixed(2), costPrice: "0.00", notes: it.notes, createdAt: now } as any);
       if (it.product.isStockTracked ?? true) {
-        await tx.insert(reservations).values({ id: crypto.randomUUID(), businessId: defaultBusinessId, storeId: defaultStoreId, orderId, orderItemId, productId: it.productId, quantity: it.quantity, status: "RESERVED", expiresAt, createdAt: now, updatedAt: now } as any);
+        await tx.insert(reservations).values({ id: crypto.randomUUID(), businessId: defaultBusinessId, storeId: defaultStoreId, orderId, orderItemId, productId: it.productId, quantity: it.quantity, status: "RESERVED", expiresAt: reservationExpiresAt, createdAt: now, updatedAt: now } as any);
         const inv = it.inv; const nextReserved = (inv?.reservedQuantity ?? 0) + it.quantity;
         if (inv) await tx.update(inventory).set({ reservedQuantity: nextReserved, updatedAt: now }).where(eq(inventory.id, inv.id));
         else await tx.insert(inventory).values({ businessId: defaultBusinessId, storeId: defaultStoreId, productId: it.productId, stockQuantity: it.product.stockQuantity ?? 0, reservedQuantity: nextReserved, minimumStock: it.product.minimumStock ?? 0, updatedAt: now } as any);
       }
     }
-    await tx.insert(payments).values({ id: paymentId, transactionId: null, orderId, channel: "STOREFRONT", currency:"IDR", paymentMethod:"manual_transfer", amount: total.toFixed(2), status:"PENDING", expiresAt, metadata: { source: "STOREFRONT" }, createdAt: now } as any);
+    await tx.insert(payments).values({ id: paymentId, transactionId: transactionId, orderId, channel: "STOREFRONT", currency:"IDR", paymentMethod:"manual_transfer", amount: total.toFixed(2), status:"PENDING", expiresAt: paymentExpiresAt, metadata: { source: "STOREFRONT" }, createdAt: now } as any);
     await tx.insert(orderStatusHistory).values({ orderId, fromOrderStatus:null, toOrderStatus:"SUBMITTED", fromPaymentStatus:null, toPaymentStatus:"PENDING", changedByUserId: authUserId, changedByRole: authUserId ? "customer" : "guest", reason:"Storefront checkout submitted; awaiting manual transfer", createdAt: now } as any);
     const response: any = {
-      orderId, orderNumber, orderSource: "STOREFRONT", orderStatus:"SUBMITTED", paymentStatus:"PENDING", paymentId,
+      orderId, orderNumber, orderSource: "STOREFRONT", orderStatus:"SUBMITTED", paymentStatus:"PENDING", paymentId, transactionId, transactionNumber,
       customer: { mode: input.customer.mode, name: input.customer.name.trim(), phone: input.customer.phone.trim() },
       items: items.map((i:any)=>({productId:i.productId,productName:i.productName,variantName:i.variantName,quantity:i.quantity,unitPrice:i.unitPrice,lineTotal:i.lineTotal})),
-      totals: { subtotal, tax, total, currency:"IDR" }, reservation: { expiresAt: expiresAt.toISOString() },
-      payment: { method:"manual_transfer", status:"PENDING", instructions: settings.instructions },
+      totals: { subtotal, tax, total, currency:"IDR" },       reservation: { expiresAt: reservationExpiresAt.toISOString() },
+      payment: { method:"manual_transfer", status:"PENDING", instructions: settings.instructions, expiresAt: paymentExpiresAt.toISOString() },
     };
     let guestAccess: { rawToken: string; expiresAt: Date } | null = null;
     if (input.customer.mode === "guest") {
       guestAccess = await createGuestAccessInTx(tx, orderId);
       response.guestAccess = { expiresAt: guestAccess.expiresAt.toISOString(), delivery: "cookie+response-once" };
     }
-    await tx.insert(checkoutIdempotency).values({ key: input.idempotencyKey, requestHash, transactionId: null, orderId, scope:"STOREFRONT", response: JSON.stringify(response), createdAt: now, expiresAt } as any)
+    await tx.insert(checkoutIdempotency).values({ key: input.idempotencyKey, requestHash, transactionId, orderId, scope:"STOREFRONT", response: JSON.stringify(response), createdAt: now, expiresAt: paymentExpiresAt } as any)
       .onConflictDoUpdate({ target: checkoutIdempotency.key, set: { orderId, scope:"STOREFRONT", response: JSON.stringify(response) } as any });
     if (guestAccess) response._guestAccessRaw = guestAccess.rawToken;
     return response;

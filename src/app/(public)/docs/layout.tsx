@@ -21,12 +21,12 @@ export default function DocsRootLayout({
   return (
     <div className="font-outfit min-h-svh bg-background">
       <RootProvider
-        theme={{ enabled: false }}
+        theme={{ enabled: true, defaultTheme: "light" }}
         search={{ options: { api: "/api/search" } }}
       >
         <DocsLayout
           tree={source.getPageTree()}
-          themeSwitch={{ enabled: false }}
+          themeSwitch={{ enabled: true }}
           sidebar={{ collapsible: false }}
           nav={{
             title: (
@@ -40,7 +40,12 @@ export default function DocsRootLayout({
               />
             ),
             url: "/",
+            transparentMode: "top",
           }}
+          links={[
+            { text: "Beranda", url: "/" },
+            { text: "Harga", url: "/plans" },
+          ]}
           slots={{ header: DocsHeaderBar }}
         >
           {children}
