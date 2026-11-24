@@ -76,7 +76,7 @@ type BusinessState = {
     businessSlug: string
     logoUrl: string | null
     role: string
-    stores: Array<{ id: string; name: string; code: string; isActive: boolean }>
+    stores: Array<{ id: string; name: string; code: string; isActive: boolean; latitude: number | null; longitude: number | null }>
   }>
 
   hydrate: () => Promise<void>
@@ -191,7 +191,7 @@ export const useBusinessStore = create<BusinessState>()((set, get) => ({
           businessSlug: string
           logoUrl: string | null
           role: string
-          stores: Array<{ id: string; name: string; code: string; isActive: boolean }>
+          stores: Array<{ id: string; name: string; code: string; isActive: boolean; latitude: number | null; longitude: number | null }>
         }> = data?.businesses ?? []
         set((state) => {
           let selectedBusinessId = state.selectedBusinessId

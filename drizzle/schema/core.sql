@@ -61,6 +61,8 @@ CREATE TABLE "core"."Stores" (
     "Name" text NOT NULL,
     "Code" text NOT NULL,
     "Address" text,
+    "Latitude" double precision,
+    "Longitude" double precision,
     "Phone" text,
     "Email" text,
     "Timezone" text NOT NULL DEFAULT 'Asia/Jakarta',

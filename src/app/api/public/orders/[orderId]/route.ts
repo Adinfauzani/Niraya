@@ -45,7 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
   } : null;
   return NextResponse.json({ order: {
     id: order.id, orderNumber: order.orderNumber, orderSource: publicSource, orderStatus: order.orderStatus, paymentStatus: order.paymentStatus,
-    customerName: order.customerName, tableNumber: isQrTable ? order.tableNumber : null, totals: { subtotal: Number(order.subtotal), tax: Number(order.taxTotal), total: Number(order.grandTotal), currency: order.currency },
+    customerName: order.customerName, tableNumber: isQrTable ? order.tableNumber : null, orderType: (order as any).orderType ?? null, totals: { subtotal: Number(order.subtotal), tax: Number(order.taxTotal), total: Number(order.grandTotal), currency: order.currency },
     items: items.map(i=>({...i, unitPrice:Number(i.unitPrice), subtotal:Number(i.subtotal)})),     payment: pay ? { id: pay.id, status: pay.status, method: pay.method, amount: Number(pay.amount), proofSubmitted: !!pay.proofSubmittedAt, referenceNumber: pay.referenceNumber || null, expiresAt: pay.expiresAt?.toISOString() ?? null, instructions: instr } : null,
     createdAt: order.createdAt, submittedAt: order.submittedAt, paidAt: order.paidAt,
   }});

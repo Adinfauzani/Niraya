@@ -36,6 +36,8 @@ function statusVariant(status: string): "default" | "secondary" | "outline" | "d
 
 function humanStatus(value?: string | null) {
   if (!value) return "-";
+  const key = value.toUpperCase();
+  if (["AWAITING_VERIFICATION", "PENDING_VERIFICATION"].includes(key)) return "Verify";
   return value.replaceAll("_", " ");
 }
 

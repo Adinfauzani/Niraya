@@ -424,6 +424,8 @@ export async function searchDiscovery(params: DiscoverySearchParams): Promise<Di
         businessName: businesses.name,
         currency: businesses.currency,
         storeAddress: stores.address,
+        storeLatitude: stores.latitude,
+        storeLongitude: stores.longitude,
         storeCreatedAt: stores.createdAt,
       })
       .from(stores)
@@ -481,7 +483,10 @@ export async function searchDiscovery(params: DiscoverySearchParams): Promise<Di
       const ownProfile = profileByBusiness.get(store.businessId);
       const profile = ownProfile ?? defaultProfile;
       const location = profile?.address?.trim() || store.storeAddress?.trim() || null;
-      const coords = parseLocationCoords(location);
+      const hasStoredCoords = typeof store.storeLatitude === "number" && typeof store.storeLongitude === "number";
+      const coords = hasStoredCoords
+        ? { lat: store.storeLatitude as number, lng: store.storeLongitude as number }
+        : parseLocationCoords(location);
       const sold = soldByStore.get(store.id);
       const soldCount = sold ? [...sold.values()].reduce((a, b) => a + b, 0) : 0;
       return {

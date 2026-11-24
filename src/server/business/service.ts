@@ -448,6 +448,12 @@ function requiredId(value: unknown, label: string): string {
   return value;
 }
 
+/** Coerce an incoming coordinate to a finite number within range, else null. */
+function toCoord(value: unknown, limit: number): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n >= -limit && n <= limit ? n : null;
+}
+
 export async function mutateBusiness(
   action: string,
   payload: any,
@@ -873,6 +879,8 @@ export async function mutateBusiness(
         name: String(payload.name ?? "").trim(),
         code: String(payload.code ?? "").trim().toUpperCase(),
         address: payload.address?.trim() || null,
+        latitude: toCoord(payload.latitude, 90),
+        longitude: toCoord(payload.longitude, 180),
         phone: payload.phone?.trim() || null,
         email: payload.email?.trim() || null,
         timezone: payload.timezone ?? "Asia/Jakarta",
@@ -890,6 +898,8 @@ export async function mutateBusiness(
           name: String(payload.name ?? "").trim(),
           code: String(payload.code ?? "").trim().toUpperCase(),
           address: payload.address?.trim() || null,
+          latitude: toCoord(payload.latitude, 90),
+          longitude: toCoord(payload.longitude, 180),
           phone: payload.phone?.trim() || null,
           email: payload.email?.trim() || null,
           timezone: payload.timezone ?? "Asia/Jakarta",

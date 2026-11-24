@@ -4,6 +4,26 @@ Semua perubahan penting pada Niraya POS dicatat di berkas ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/)
 dan proyek ini memakai [Semantic Versioning](https://semver.org/lang/id/).
 
+## [0.1.5] - 2026-11-24
+
+### Ditambahkan
+
+- Verifikasi pembayaran manual oleh kasir di `/orders`: tombol **Setujui pembayaran** / **Tolak** pada blok bukti transfer (muncul saat status menunggu verifikasi), memanggil `qr.payment.verify` sehingga `paymentStatus` order berubah ke `PAID` (payment `COMPLETED`) dan status pesanan pelanggan ikut diperbarui.
+- Pilihan tipe pesanan di checkout storefront: **Makan di tempat** / **Bawa pulang** (default takeaway), diteruskan ke server dan ditampilkan pada kartu status pesanan pelanggan.
+- Pemilih metode pembayaran berbasis label (QRIS / Transfer / E-Wallet) di checkout dan halaman pembayaran, mengikuti instruksi yang benar-benar dikonfigurasi bisnis.
+- Halaman status pesanan pelanggan setelah unggah bukti kini menampilkan ringkasan (atas nama, tipe/meja, stepper status Dipesan → Bukti → Verifikasi) dan menyembunyikan instruksi pembayaran/unggah saat menunggu verifikasi.
+
+### Diperbaiki
+
+- Checkout storefront gagal (`Checkout gagal`): query pengaturan tidak lagi mereferensikan kolom `PaymentExpiryMinutes` yang tidak ada pada `settings.BusinessSettings` (memakai `OperationalSettings`), dan pemuatan pengaturan dipindah ke luar transaksi agar kegagalan query pengaturan tidak menggagalkan transaksi penyimpanan pesanan.
+- Migrasi `drizzle/0011_order_payment_status_awaiting_verification.sql` disesuaikan ke skema `transactions.Orders` (sebelumnya salah menargetkan `core.Orders`) sehingga constraint `Orders_PaymentStatus_check` sudah mencakup `AWAITING_VERIFICATION` pada database aktif; unggah bukti transfer tidak lagi ditolak constraint.
+- Mengatasi error React "Rendered more hooks than during the previous render" pada `StorefrontOrderView` (`/menu/checkout?orderId=...`) dengan memindahkan `useEffect`/`useMemo` ke atas early-return.
+- Label status `AWAITING_VERIFICATION`/`PENDING_VERIFICATION` ditampilkan sebagai "Verify" (Orders, My Orders, Profile, halaman status storefront).
+
+### Diubah
+
+- UI/UX halaman pembayaran & status pesanan storefront dirapikan: kartu status dengan stepper dan info ringkas, kartu pembayaran dengan daftar rekening bersih/QRIS, kartu "Total transfer" dihapus (total sudah ada di Ringkasan item).
+
 ## [0.1.4] - 2026-11-23
 
 ### Ditambahkan

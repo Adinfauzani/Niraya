@@ -11,6 +11,8 @@ export async function getStores(businessId: string): Promise<
     name: string;
     code: string;
     address: string | null;
+    latitude: number | null;
+    longitude: number | null;
     phone: string | null;
     email: string | null;
     timezone: string;
@@ -27,6 +29,8 @@ export async function getStores(businessId: string): Promise<
       name: row.name,
       code: row.code,
       address: row.address,
+      latitude: row.latitude ?? null,
+      longitude: row.longitude ?? null,
       phone: row.phone,
       email: row.email,
       timezone: row.timezone,
@@ -45,6 +49,8 @@ export async function createStore(
     name: string;
     code: string;
     address?: string;
+    latitude?: number | null;
+    longitude?: number | null;
     phone?: string;
     email?: string;
     timezone?: string;
@@ -76,6 +82,8 @@ export async function createStore(
     name: data.name.trim(),
     code,
     address: data.address?.trim() || null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
     phone: data.phone?.trim() || null,
     email: data.email?.trim() || null,
     timezone: data.timezone ?? "Asia/Jakarta",
@@ -93,6 +101,8 @@ export async function updateStore(
     name: string;
     code: string;
     address?: string;
+    latitude?: number | null;
+    longitude?: number | null;
     phone?: string;
     email?: string;
     timezone?: string;
@@ -112,6 +122,8 @@ export async function updateStore(
     name: data.name.trim(),
     code,
     address: data.address?.trim() || null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
     phone: data.phone?.trim() || null,
     email: data.email?.trim() || null,
     timezone: data.timezone ?? "Asia/Jakarta",

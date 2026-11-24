@@ -23,19 +23,19 @@
 ## Auth & access
 - **Better Auth** config: `src/server/auth/config.ts` (Drizzle adapter vs `core`, `camelCase: false`, Google+GitHub OAuth). Route handler: `src/app/api/auth/[...path]/route.ts`. Client: `authClient` in `src/lib/authClient.ts`. `requireEmailVerification: false`; email/password and reset exist but only `console.log` (stubs, no real email sent).
 - `getSession()` in `src/lib/auth.ts` returns `{ user, session }` from `auth.api.getSession` (headers via `next/headers`).
-- `src/proxy.ts` -> `updateSession` in `src/lib/auth/middleware.ts`. Matcher covers all non-static paths. Login-required (redirect to `/login`): `/dashboard`, `/products`, `/inventory`, `/categories`, `/customers`, `/orders`, `/transactions`, `/reports`, `/pos`, `/staff`, `/help`, `/onboarding`, `/home`, `/api/business`, `/api/pos`, `/api/staff`, `/api/settings`. Tenant headers `x-tenant-business-id`/`x-tenant-store-id` set only for `/api/business|pos|staff|settings`. `/` redirects guests to `/search`, logged-in users to `/profile`; auth pages redirect logged-in users to `/profile`. Role `user` blocked from dashboard pages -> `/profile` (except onboarding flow). Maintenance blocks non-GET `/api/*` with 503 except bypass list (`/api/maintenance`, `/api/auth`, `/api/health`, `/api/internal`, `/api/webhooks`, `/api/billing`, auth pages).
+- `src/proxy.ts` -> `updateSession` in `src/lib/auth/middleware.ts`. Matcher covers all non-static paths. Login-required (redirect to `/login`): all `dashboardPagePaths` (`/dashboard`, `/products`, `/inventory`, `/categories`, `/customers`, `/orders`, `/transactions`, `/reports`, `/pos`, `/staff`, `/settings`, `/help`), `/onboarding`, `/orders/me`, `/docs`, `/api/business`, `/api/pos`, `/api/staff`, `/api/settings`. Tenant headers `x-tenant-business-id`/`x-tenant-store-id` set only for `/api/business|pos|staff|settings`. `/` is public for guests; logged-in users on `/` and on auth pages redirect to `/home` (not `/profile`). Role `user` blocked from dashboard pages -> `/profile` (except onboarding flow and `/orders/me`). Maintenance blocks non-GET `/api/*` with 503 except bypass list (`/api/maintenance`, `/api/auth`, `/api/health`, `/api/internal`, `/api/webhooks`, `/api/billing`, auth pages). Auth context + tenant + maintenance are cached (120s / 120s / 60s TTL) — changes take effect within the TTL.
 - Roles `free|user|owner|admin|manager|cashier` in `core.UserProfiles` (`UserRole` in `src/server/auth/session.ts`); `DEFAULT_ROLE = "user"`. `ensureUserProfile` creates `user` on first login; `requireRole` + `ACTION_ROLES` gate mutations.
 - Add a mutation action in both `mutateBusiness` (`src/server/business/service.ts`) and `ACTION_ROLES`; client posts `{action,payload}` to `/api/business`.
 
 ## App map
-- `(dashboard)` POS/admin (`/dashboard`, `/pos`, products, inventory, customers, staff, reports, settings, categories); `(auth)` login/signup; `/menu` public storefront + order/payment; `/profile`; `/plans`; `/onboarding`.
-- `/api/business` single CRUD dispatcher (protected); `/api/pos/checkout` + `/api/pos/feature-check`; `/api/public/storefront/*` guest catalog/checkout; `/api/public/orders|payments` guest tokens; `/api/staff/users` app roles; `/api/settings/business` settings; `/api/billing/{claim,claim-subscription,entitlements}`; `/api/onboarding`; `/api/me`, `/api/me/activity`; `/api/maintenance`; `/api/webhooks/gumroad`.
-- `/api/internal/jobs/expire-reservations` and `.../reconcile-subscriptions` are cron endpoints checking `Authorization: Bearer $INTERNAL_CRON_SECRET` when set.
-- Server: `src/server/{business,pos,storefront,auth,security,storage,db,billing,entitlements,repositories,services,lib}`; feature UI: `src/features/*`; shared UI: `src/components/*`.
+- `(dashboard)` POS/admin (`/dashboard`, `/pos`, products, inventory, customers, staff, reports, settings, categories, `/dashboard/plans`); `(auth)` login/signup/register/forgot/reset; `(public)` discovery surface (`/home`, `/search`, `/search/[slug]`, `/discovery/product/[id]`, `/docs` fumadocs, `/[storeSlug]/menu`, `/menu` + `/menu/checkout` + `/menu/order/[orderId]/payment`); `/profile`; `/plans`; `/orders/me`; `/onboarding`.
+- `/api/business` single CRUD dispatcher (protected); `/api/business/switch` tenant switch; `/api/pos/{checkout,feature-check}`; `/api/public/storefront/{context,catalog,checkout}` + `/api/public/orders/*` + `/api/public/payments/proof` guest tokens; `/api/staff/{users,join,verify-code}`; `/api/settings/business`; `/api/billing/{claim,claim-subscription,entitlements}`; `/api/onboarding/{initialize,status}`; `/api/me`, `/api/me/activity`; `/api/orders`, `/api/orders/[id]`, `/api/orders/[id]/proof`; `/api/search`, `/api/profile`, `/api/discovery/{search,notifications}`; `/api/maintenance/{status,config}`; `/api/webhooks/gumroad`; `/api/health`.
+- `/api/internal/jobs/expire-reservations`, `.../reconcile-subscriptions`, and `.../cancel-unpaid-orders` are cron endpoints checking `Authorization: Bearer $INTERNAL_CRON_SECRET` when set.
+- Server: `src/server/{business,pos,storefront,auth,security,storage,db,billing,entitlements,repositories,services,discovery,stores,lib}`; feature UI: `src/features/*`; shared UI: `src/components/*`; other `src/` dirs: `hooks`, `stores`, `shared`, `types`, `fonts`.
 
 ## Operational gotchas
 - Rate limiting: Upstash when `UPSTASH_REDIS_REST_*` set, else in-memory (not multi-instance/serverless safe).
-- Payment proofs: `.data/payment-proofs` in dev; production fails closed (no S3 adapter).
+- Payment proofs (`src/server/storage/PaymentProof.ts`): dev/local uses `.data/payment-proofs` (`PAYMENT_PROOF_DIR`); production/Vercel uses S3-compatible storage via `PAYMENT_PROOF_STORAGE=s3` + `PAYMENT_PROOF_S3_{ENDPOINT,REGION,BUCKET,ACCESS_KEY_ID,SECRET_ACCESS_KEY}` (fails closed if unset).
 - `src/server/db/index.ts` keeps one global postgres pool per bundle; middleware and route handlers are separate bundles, so pool is capped at 1 on Vercel, 5 locally.
 
 ## Testing
@@ -44,6 +44,5 @@
 
 ## Stale sources (trust `src/` and config)
 - `README.md` still says Supabase Auth and points at `drizzle/init.sql`; the app uses Better Auth and per-schema files in `drizzle/schema/`.
-- `docs/TECH_STACK.md` and `docs/PROJECT_STRUCTURE.md` no longer exist. `docs/DESIGN.md`, `docs/ARCHITECTURE_AUDIT.md`, `docs/refactor/*` may lag; `docs/refactor/REFACTOR_STATUS.md` holds useful history.
 - Root `Dockerfile`/`docker-compose.yml` reference an old Vite/nginx build; not current.
-- Root `AUDIT.md`, `REFACTOR.md`, and `session-ses_e581.md` (~16MB) are session/audit dumps — don't read the dump wholesale.
+- Root `AUDIT.md`, `REFACTOR.md`, `prompt.md`, `CHANGELOG.md` are session/audit dumps — don't read wholesale.

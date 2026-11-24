@@ -1,6 +1,7 @@
 import {
   boolean,
   check,
+  doublePrecision,
   index,
   integer,
   primaryKey,
@@ -88,6 +89,8 @@ export const stores = core.table(
     name: text("Name").notNull(),
     code: text("Code").notNull(),
     address: text("Address"),
+    latitude: doublePrecision("Latitude"),
+    longitude: doublePrecision("Longitude"),
     phone: text("Phone"),
     email: text("Email"),
     timezone: text("Timezone").notNull().default("Asia/Jakarta"),

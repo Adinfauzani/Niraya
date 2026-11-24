@@ -28,6 +28,10 @@ import {
 } from "@/features/storefront/cart";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { slugifyStoreName } from "@/lib/storeSlug";
+import {
+  buildPaymentMethods,
+  type PaymentMethodId,
+} from "@/features/storefront/paymentMethods";
 
 type PaymentInstructions = {
   bankName?: string | null;
@@ -69,6 +73,8 @@ export function StorefrontCheckout() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [method, setMethod] = useState<PaymentMethodId | null>(null);
+  const [orderType, setOrderType] = useState<"dine-in" | "takeaway">("takeaway");
 
   useEffect(() => {
     setCart(loadCart(cartStorageKey(storeId)));
@@ -117,6 +123,15 @@ export function StorefrontCheckout() {
 
   const checkoutEnabled =
     catalog?.catalog.payment.storefrontCheckoutEnabled !== false;
+
+  const paymentMethods = useMemo(
+    () => buildPaymentMethods(catalog?.catalog.payment.instructions),
+    [catalog],
+  );
+  const activeMethod: PaymentMethodId | null =
+    method && paymentMethods.some((m) => m.id === method)
+      ? method
+      : paymentMethods[0]?.id ?? null;
   const storeName = catalog?.catalog.store?.name || null;
   const menuHref = storeName
     ? `/${slugifyStoreName(storeName)}/menu`
@@ -154,7 +169,7 @@ export function StorefrontCheckout() {
           idempotencyKey: getOrCreateIdemKey(idemStorageKey(storeId)),
           storeId: storeId || undefined,
           paymentMethod: "manual_transfer",
-          orderType: "takeaway",
+          orderType,
           notes: notes.trim() || undefined,
           guest: { name: name.trim(), phone: phone.trim() },
           items: cart.map((line) => ({
@@ -173,7 +188,8 @@ export function StorefrontCheckout() {
         throw new Error("Pesanan dibuat tetapi ID pesanan tidak diterima. Silakan cek status pesanan.");
       }
       toast.success("Pesanan dibuat", { description: "Lanjut ke pembayaran & status pesanan." });
-      router.replace(`/menu/checkout?orderId=${encodeURIComponent(String(orderId))}`);
+      const methodParam = activeMethod ? `&method=${encodeURIComponent(activeMethod)}` : "";
+      router.replace(`/menu/checkout?orderId=${encodeURIComponent(String(orderId))}${methodParam}`);
     } catch (error: any) {
       toast.error("Checkout gagal", {
         description: error?.message || "Silakan coba lagi.",
@@ -273,6 +289,33 @@ export function StorefrontCheckout() {
               </p>
             </section>
 
+            <section className="rounded-2xl border border-border/70 bg-card p-4">
+              <h2 className="text-sm font-medium">Tipe pesanan</h2>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {([
+                  { id: "dine-in", label: "Makan di tempat" },
+                  { id: "takeaway", label: "Bawa pulang" },
+                ] as const).map((opt) => {
+                  const selected = orderType === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setOrderType(opt.id)}
+                      aria-pressed={selected}
+                      className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                        selected
+                          ? "border-blue-600 bg-blue-600/[0.06] text-foreground ring-1 ring-blue-600"
+                          : "border-border/70 bg-muted/10 text-muted-foreground hover:bg-muted/30"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
             <section className="space-y-3 rounded-2xl border border-border/70 bg-card p-4">
               <h2 className="text-sm font-medium">Data pemesan</h2>
               <div className="space-y-1.5">
@@ -333,30 +376,66 @@ export function StorefrontCheckout() {
             <section className="rounded-2xl border border-border/70 bg-card p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-medium">Metode pembayaran</h2>
-                <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Transfer manual</span>
               </div>
-              <p className="mt-2 text-[13px] text-muted-foreground">
-                Klik <span className="font-medium text-foreground">Buat pesanan &amp; lanjut bayar</span> untuk membuat pesanan dan membuka halaman pembayaran (instruksi transfer/QRIS &amp; unggah bukti).
-              </p>
-              {catalog?.catalog.payment.instructions?.qrisImageUrl ? (
-                <div className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-muted/10 p-3">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">QRIS (scan di halaman pembayaran)</p>
-                  <img src={String(catalog.catalog.payment.instructions.qrisImageUrl)} alt="QRIS" className="h-44 w-44 rounded-lg border bg-white object-contain p-2" />
-                </div>
-              ) : null}
-              {catalog?.catalog.payment.instructions?.bankName || catalog?.catalog.payment.instructions?.accountNumber ? (
-                <div className="mt-3 space-y-1.5 text-[13px]">
-                  {catalog.catalog.payment.instructions?.bankName ? (
-                    <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Bank/E-wallet</span><span className="font-medium">{catalog.catalog.payment.instructions.bankName}</span></div>
+
+              {paymentMethods.length > 0 ? (
+                <>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Pilih cara pembayaran. Instruksi lengkap tampil setelah pesanan dibuat.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {paymentMethods.map((m) => {
+                      const selected = activeMethod === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setMethod(m.id)}
+                          aria-pressed={selected}
+                          className={`rounded-2xl border px-3 py-2.5 text-left transition ${
+                            selected
+                              ? "border-blue-600 bg-blue-600/[0.06] ring-1 ring-blue-600"
+                              : "border-border/70 bg-muted/10 hover:bg-muted/30"
+                          }`}
+                        >
+                          <span className="block truncate text-sm font-semibold">
+                            {m.label}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                            {m.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeMethod === "qris" && catalog?.catalog.payment.instructions?.qrisImageUrl ? (
+                    <div className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-muted/10 p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Pindai QRIS</p>
+                      <img src={String(catalog.catalog.payment.instructions.qrisImageUrl)} alt="QRIS" className="h-40 w-40 rounded-lg border bg-white object-contain p-2" />
+                    </div>
                   ) : null}
-                  {catalog.catalog.payment.instructions?.accountName ? (
-                    <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Atas nama</span><span className="font-medium">{catalog.catalog.payment.instructions.accountName}</span></div>
+
+                  {activeMethod === "transfer" && (catalog?.catalog.payment.instructions?.bankName || catalog?.catalog.payment.instructions?.accountNumber) ? (
+                    <div className="mt-3 space-y-1.5 rounded-xl border border-border/60 bg-muted/10 p-3 text-[13px]">
+                      {catalog.catalog.payment.instructions?.bankName ? (
+                        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Bank/E-wallet</span><span className="font-medium">{catalog.catalog.payment.instructions.bankName}</span></div>
+                      ) : null}
+                      {catalog.catalog.payment.instructions?.accountName ? (
+                        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Atas nama</span><span className="font-medium">{catalog.catalog.payment.instructions.accountName}</span></div>
+                      ) : null}
+                      {catalog.catalog.payment.instructions?.accountNumber ? (
+                        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">No. tujuan</span><span className="font-mono font-medium">{catalog.catalog.payment.instructions.accountNumber}</span></div>
+                      ) : null}
+                    </div>
                   ) : null}
-                  {catalog.catalog.payment.instructions?.accountNumber ? (
-                    <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">No. tujuan</span><span className="font-mono font-medium">{catalog.catalog.payment.instructions.accountNumber}</span></div>
-                  ) : null}
-                </div>
-              ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-[13px] text-muted-foreground">
+                  Klik <span className="font-medium text-foreground">Buat pesanan &amp; lanjut bayar</span> untuk membuat pesanan dan membuka halaman pembayaran.
+                </p>
+              )}
+
               {catalog?.catalog.payment.instructions?.instructions ? (
                 <p className="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-muted-foreground">{catalog.catalog.payment.instructions.instructions}</p>
               ) : null}

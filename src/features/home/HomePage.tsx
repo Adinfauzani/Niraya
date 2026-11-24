@@ -259,6 +259,7 @@ export function HomePage({ data, user }: { data: HomeDiscoveryData; user: Curren
   }, [notifOpen]);
 
   const watchIdRef = useRef<number | null>(null);
+  const lastGeocodedRef = useRef<{ lat: number; lng: number } | null>(null);
   const [liveLocation, setLiveLocation] = useState(false);
 
   useEffect(() => {
@@ -269,35 +270,68 @@ export function HomePage({ data, user }: { data: HomeDiscoveryData; user: Curren
     };
   }, []);
 
+  // Reverse-geocode the device coordinate into a place label (e.g. "Gunung Putri").
+  // Debounced + throttled: only re-query after movement settles or the point moved
+  // ~300m, so Nominatim is not hammered by watchPosition updates.
+  useEffect(() => {
+    if (!coords) {
+      lastGeocodedRef.current = null;
+      return;
+    }
+    const last = lastGeocodedRef.current;
+    if (last) {
+      const dLat = coords.lat - last.lat;
+      const dLng = coords.lng - last.lng;
+      if (Math.sqrt(dLat * dLat + dLng * dLng) < 0.003) return; // ~300m
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/discovery/reverse-geocode?lat=${coords.lat}&lng=${coords.lng}`, { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        const label = typeof data?.label === "string" ? data.label : null;
+        if (label) {
+          setLocationLabel(label);
+          lastGeocodedRef.current = { lat: coords.lat, lng: coords.lng };
+        }
+      } catch {
+        // keep the generic status label on failure
+      }
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [coords]);
+
   function stopLiveLocation() {
     if (watchIdRef.current != null && "geolocation" in navigator) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
     setLiveLocation(false);
+    setCoords(null);
+    setLocationLabel(null);
   }
 
   function requestLocation() {
     if (!("geolocation" in navigator)) {
-      setLocationLabel("Lokasi perangkat tidak tersedia");
       return;
     }
     // Toggle real-time watch when already tracking; otherwise start live tracking.
     if (liveLocation && watchIdRef.current != null) {
       stopLiveLocation();
-      setLocationLabel("Pelacakan lokasi dimatikan");
       return;
     }
     setLocBusy(true);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationLabel("Lokasi real-time aktif");
         setLiveLocation(true);
         setLocBusy(false);
       },
       () => {
-        setLocationLabel("Izin lokasi ditolak/tidak tersedia");
         setLocBusy(false);
         setLiveLocation(false);
       },
@@ -318,7 +352,7 @@ export function HomePage({ data, user }: { data: HomeDiscoveryData; user: Curren
           <div className="flex items-center gap-1.5">
             <button type="button" onClick={requestLocation} className="hidden max-w-[220px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-3 py-1.5 text-[12px] text-muted-foreground transition hover:text-foreground sm:flex">
               {locBusy ? <Loader2 className="size-3.5 animate-spin" /> : <MapPin className="size-3.5" />}
-              <span className="truncate">{locationLabel || (data.hasLocation ? "Lokasi toko tersedia" : "Gunakan lokasi saya")}{liveLocation ? " · live" : ""}</span>
+              <span className="truncate">{liveLocation && locationLabel ? locationLabel : "Location"}</span>
             </button>
             <div className="relative">
               <button type="button" aria-label="Notifikasi" onClick={() => setNotifOpen((v) => !v)} className="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground">
@@ -370,7 +404,7 @@ export function HomePage({ data, user }: { data: HomeDiscoveryData; user: Curren
           </div>
           <div className="flex items-center gap-2 sm:hidden">
             <button type="button" onClick={requestLocation} className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] transition", liveLocation ? "border-foreground/20 bg-foreground text-background" : "border-border/60 text-muted-foreground")}>
-              {locBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Navigation className="size-3.5" />} {locationLabel || "Gunakan lokasi saya"}{liveLocation ? " (aktif)" : ""}
+              {locBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Navigation className="size-3.5" />} {liveLocation && locationLabel ? locationLabel : "Location"}
             </button>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto pb-1 text-[12px] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -387,7 +421,7 @@ export function HomePage({ data, user }: { data: HomeDiscoveryData; user: Curren
 
         {activeSearch ? (
           <section className="space-y-6">
-            <SectionHeader title="Hasil pencarian" subtitle={searching ? "Mencari..." : `${searchRes?.stores.length ?? 0} toko · ${searchRes?.products.length ?? 0} produk${coords ? (liveLocation ? " · lokasi real-time" : " · dekat Anda") : ""}`} icon={Search} />
+            <SectionHeader title="Hasil pencarian" subtitle={searching ? "Mencari..." : `${searchRes?.stores.length ?? 0} toko · ${searchRes?.products.length ?? 0} produk${coords ? " · dekat Anda" : ""}`} icon={Search} />
             {searching ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Memuat hasil dari pencarian...</div>
             ) : null}

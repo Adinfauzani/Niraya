@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   Ban,
   Calendar,
+  Check,
   CheckCircle2,
   ChefHat,
   Clock,
@@ -17,6 +18,7 @@ import {
   RefreshCw,
   Store,
   UtensilsCrossed,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -124,9 +126,9 @@ const PAYMENT_LABEL: Record<string, string> = {
   EXPIRED: 'Kedaluwarsa',
   PARTIALLY_REFUNDED: 'Refund sebagian',
   REFUNDED: 'Refund',
-  AWAITING_VERIFICATION: 'Menunggu verifikasi',
+  AWAITING_VERIFICATION: 'Verify',
   WAITING_PROOF: 'Menunggu bukti',
-  PENDING_VERIFICATION: 'Menunggu verifikasi',
+  PENDING_VERIFICATION: 'Verify',
   REJECTED: 'Ditolak',
   COMPLETED: 'Lunas/Terverifikasi',
 }
@@ -210,6 +212,28 @@ export function OrdersPage() {
         if (detailId === order.id) void loadDetail(order.id)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Gagal memperbarui pesanan.')
+      } finally {
+        setUpdatingId(null)
+      }
+    },
+    [detailId, loadDetail, refresh],
+  )
+
+  const verifyPayment = useCallback(
+    async (payment: OrderPaymentDetail, action: 'APPROVE' | 'REJECT') => {
+      if (!detailId) return
+      setUpdatingId(detailId)
+      try {
+        await mutateBusiness('qr.payment.verify', {
+          paymentId: payment.id,
+          action,
+          reason: action === 'REJECT' ? 'Bukti tidak valid' : undefined,
+        })
+        toast.success(action === 'APPROVE' ? 'Pembayaran disetujui' : 'Pembayaran ditolak')
+        await refresh()
+        await loadDetail(detailId)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Gagal memverifikasi pembayaran.')
       } finally {
         setUpdatingId(null)
       }
@@ -335,6 +359,7 @@ export function OrdersPage() {
         onOpenChange={(open) => !open && setDetailId(null)}
         onRetry={() => detailId && void loadDetail(detailId)}
         onChangeStatus={changeStatus}
+        onVerifyPayment={verifyPayment}
       />
     </div>
   )
@@ -509,12 +534,21 @@ function OrderItemsList({
 function PaymentProofBlock({
   orderId,
   payment,
+  busy,
+  onVerify,
 }: {
   orderId: string
   payment: OrderPaymentDetail
+  busy?: boolean
+  onVerify?: (payment: OrderPaymentDetail, action: 'APPROVE' | 'REJECT') => void
 }) {
   const proofUrl = `/api/orders/${encodeURIComponent(orderId)}/proof?paymentId=${encodeURIComponent(payment.id)}`
   const statusKey = String(payment.status ?? '').toUpperCase()
+  const canVerify =
+    statusKey === 'AWAITING_VERIFICATION' ||
+    statusKey === 'PENDING_VERIFICATION' ||
+    statusKey === 'WAITING_PROOF' ||
+    statusKey === 'PENDING'
   const statusVariant: 'success' | 'warning' | 'destructive' | 'secondary' =
     statusKey === 'COMPLETED' || statusKey === 'PAID'
       ? 'success'
@@ -568,6 +602,18 @@ function PaymentProofBlock({
           <span>Belum ada bukti transfer diunggah.</span>
         </div>
       )}
+      {canVerify && onVerify ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button size="sm" variant="default" disabled={busy} onClick={() => onVerify(payment, 'APPROVE')}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+            Setujui pembayaran
+          </Button>
+          <Button size="sm" variant="destructive" disabled={busy} onClick={() => onVerify(payment, 'REJECT')}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+            Tolak
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -581,6 +627,7 @@ function OrderDetailSheet({
   onOpenChange,
   onRetry,
   onChangeStatus,
+  onVerifyPayment,
 }: {
   orderId: string | null
   detail: OrderDetail | null
@@ -590,6 +637,7 @@ function OrderDetailSheet({
   onOpenChange: (open: boolean) => void
   onRetry: () => void
   onChangeStatus: (order: Order, status: OrderStatus) => void
+  onVerifyPayment: (payment: OrderPaymentDetail, action: 'APPROVE' | 'REJECT') => void
 }) {
   const open = !!orderId
   const status = detail ? (STATUS_META[detail.status] ?? STATUS_META.SUBMITTED) : null
@@ -676,7 +724,7 @@ function OrderDetailSheet({
                 {detail.payments && detail.payments.length > 0 ? (
                   <div className="space-y-3">
                     {detail.payments.map((p) => (
-                      <PaymentProofBlock key={p.id} orderId={detail.id} payment={p} />
+                      <PaymentProofBlock key={p.id} orderId={detail.id} payment={p} busy={busy} onVerify={onVerifyPayment} />
                     ))}
                   </div>
                 ) : (

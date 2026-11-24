@@ -172,7 +172,7 @@ export async function getUserBusinessesWithStores(userId: string): Promise<
     businessSlug: string;
     logoUrl: string | null;
     role: string;
-    stores: Array<{ id: string; name: string; code: string; isActive: boolean }>;
+    stores: Array<{ id: string; name: string; code: string; isActive: boolean; latitude: number | null; longitude: number | null }>;
   }>
 > {
   const memberships = await db.query.businessMembers.findMany({
@@ -205,7 +205,7 @@ export async function getUserBusinessesWithStores(userId: string): Promise<
     businessSlug: string;
     logoUrl: string | null;
     role: string;
-    stores: Array<{ id: string; name: string; code: string; isActive: boolean }>;
+    stores: Array<{ id: string; name: string; code: string; isActive: boolean; latitude: number | null; longitude: number | null }>;
   }> = [];
 
   for (const membership of memberships) {
@@ -214,7 +214,7 @@ export async function getUserBusinessesWithStores(userId: string): Promise<
 
     const userStores = await db.query.stores.findMany({
       where: and(eq(stores.businessId, membership.businessId), eq(stores.isActive, true)),
-      columns: { id: true, name: true, code: true, isActive: true },
+      columns: { id: true, name: true, code: true, isActive: true, latitude: true, longitude: true },
     });
 
     const profile = profileMap.get(membership.businessId);

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import {
   BellIcon, Building2Icon, CreditCardIcon, DownloadIcon, LinkIcon, Loader2Icon,
-  MonitorIcon, MoonIcon, PaletteIcon, SaveIcon, ServerIcon, Settings2Icon,
+  MapPinIcon, MonitorIcon, MoonIcon, PaletteIcon, SaveIcon, ServerIcon, Settings2Icon,
   ShieldIcon, StoreIcon, SunIcon, UserCircle2Icon,
 } from "lucide-react";
 
@@ -220,6 +220,8 @@ const receiptSchema = z.object({ receiptFooter: z.string().trim().max(240) });
 
 const storeNameSchema = z.object({
   storeName: z.string().trim().min(1, "Nama toko wajib diisi").max(200),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
 });
 
 type ProfileValues = z.input<typeof profileSchema>;
@@ -311,6 +313,7 @@ export function SettingsPage() {
     loadBusinesses,
   } = useBusinessStore();
   const [savingStore, setSavingStore] = useState(false);
+  const [locatingStore, setLocatingStore] = useState(false);
   const [storeOrigin, setStoreOrigin] = useState("");
   useEffect(() => {
     if (typeof window !== "undefined") setStoreOrigin(window.location.origin);
@@ -333,10 +336,10 @@ export function SettingsPage() {
   const paymentForm = useForm<PaymentValues>({ resolver: zodResolver(paymentSchema) as any, defaultValues: { paymentGatewayModuleStatus: "NOT_INSTALLED", qrManualTransferEnabled: true, manualTransferBankName: "", manualTransferAccountName: "", manualTransferAccountNumber: "", manualTransferInstructions: "", manualTransferQrisImageUrl: null, acceptCash: true, acceptCard: false, acceptQris: false, acceptTransfer: true } });
   const systemForm = useForm<SystemValues>({ resolver: zodResolver(systemSchema) as any, defaultValues: { debugMode: false, apiRateLimit: 100, backupEnabled: true, backupFrequency: "daily" } });
   const receiptForm = useForm<ReceiptValues>({ resolver: zodResolver(receiptSchema) as any, defaultValues: { receiptFooter: "" } });
-  const storeForm = useForm<StoreNameValues>({ resolver: zodResolver(storeNameSchema) as any, defaultValues: { storeName: "" } });
+  const storeForm = useForm<StoreNameValues>({ resolver: zodResolver(storeNameSchema) as any, defaultValues: { storeName: "", latitude: null, longitude: null } });
   useEffect(() => {
-    if (currentStore?.name) storeForm.reset({ storeName: currentStore.name });
-  }, [currentStore?.id, currentStore?.name, storeForm]);
+    if (currentStore?.name) storeForm.reset({ storeName: currentStore.name, latitude: currentStore.latitude ?? null, longitude: currentStore.longitude ?? null });
+  }, [currentStore?.id, currentStore?.name, currentStore?.latitude, currentStore?.longitude, storeForm]);
 
   useEffect(() => {
     void loadBusinesses();
@@ -418,18 +421,47 @@ export function SettingsPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "store.update", payload: { id: currentStore.id, name: values.storeName, code: currentStore.code, isActive: currentStore.isActive } }),
+        body: JSON.stringify({ action: "store.update", payload: { id: currentStore.id, name: values.storeName, code: currentStore.code, isActive: currentStore.isActive, latitude: values.latitude ?? null, longitude: values.longitude ?? null } }),
       });
       const payload = await readJson<any>(res);
       if (!res.ok) throw new Error(payload?.error || "Gagal menyimpan toko.");
       await loadBusinesses();
-      storeForm.reset({ storeName: values.storeName.trim() });
-      toast.success("Nama toko disimpan", { description: "Tautan menu publik diperbarui sesuai nama toko." });
+      storeForm.reset({ storeName: values.storeName.trim(), latitude: values.latitude ?? null, longitude: values.longitude ?? null });
+      toast.success("Data toko disimpan", { description: "Nama dan lokasi toko diperbarui." });
     } catch (e: any) {
       toast.error("Gagal menyimpan toko", { description: e?.message || "Silakan coba lagi." });
     } finally {
       setSavingStore(false);
     }
+  }
+
+  function useMyStoreLocation() {
+    if (!("geolocation" in navigator)) {
+      toast.error("Lokasi perangkat tidak tersedia");
+      return;
+    }
+    setLocatingStore(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        storeForm.setValue("latitude", pos.coords.latitude, { shouldDirty: true });
+        storeForm.setValue("longitude", pos.coords.longitude, { shouldDirty: true });
+        setLocatingStore(false);
+        let place: string | null = null;
+        try {
+          const res = await fetch(`/api/discovery/reverse-geocode?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`, { cache: "no-store" });
+          const data = await res.json();
+          if (typeof data?.label === "string") place = data.label;
+        } catch {
+          // ignore; still saved the raw coordinates
+        }
+        toast.success("Lokasi toko diambil", { description: place ? `${place} · ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}` : `Lat ${pos.coords.latitude.toFixed(6)}, Lng ${pos.coords.longitude.toFixed(6)}` });
+      },
+      () => {
+        setLocatingStore(false);
+        toast.error("Gagal mengambil lokasi", { description: "Izinkan akses lokasi di browser, lalu coba lagi." });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
   }
 
   const watchedStoreName = storeForm.watch("storeName") ?? "";
@@ -575,7 +607,30 @@ export function SettingsPage() {
                                 <FormMessage />
                               </FormItem>
                             )} />
+                            <FormField control={storeForm.control} name="latitude" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Latitude</FormLabel>
+                                <FormControl><Input type="number" step="any" placeholder="-6.200000" className="h-10 rounded-xl" disabled={!canEditStore} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={storeForm.control} name="longitude" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Longitude</FormLabel>
+                                <FormControl><Input type="number" step="any" placeholder="106.816666" className="h-10 rounded-xl" disabled={!canEditStore} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
                           </FieldGrid>
+                          <div className="flex flex-col gap-2 rounded-xl border border-border/70 p-4">
+                            <p className="text-sm font-medium">Lokasi toko (GPS)</p>
+                            <p className="text-[13px] text-muted-foreground">Mengisi koordinat toko agar pelanggan dapat menemukan toko terdekat dari lokasi mereka. Ambil dari perangkat ini (harus berada di lokasi toko) atau isi manual.</p>
+                            <div>
+                              <Button type="button" variant="outline" onClick={useMyStoreLocation} disabled={!canEditStore || locatingStore} className="h-9 rounded-xl">
+                                {locatingStore ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <MapPinIcon className="size-4" aria-hidden />}Gunakan lokasi saya
+                              </Button>
+                            </div>
+                          </div>
                           <div className="space-y-2 rounded-xl border border-border/70 p-4">
                             <p className="text-sm font-medium">Simulasi tautan menu publik</p>
                             <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">

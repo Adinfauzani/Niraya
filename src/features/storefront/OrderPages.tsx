@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,7 +11,6 @@ import {
   ReceiptText,
   RefreshCw,
   Upload,
-  UtensilsCrossed,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,10 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { getJson } from "@/features/storefront/api";
 import { formatCurrency } from "@/lib/format";
+import {
+  buildPaymentMethods,
+  type PaymentMethodId,
+} from "@/features/storefront/paymentMethods";
 
 function norm(v: unknown) {
   return String(v || "")
@@ -40,14 +41,16 @@ function TopDesktopNav() {
 }
 
 /** Unified storefront order view: status, payment instructions/QRIS, proof upload, items. */
-export function StorefrontOrderView({ orderId }: { orderId: string }) {
-  const router = useRouter();
+export function StorefrontOrderView({ orderId, initialMethod }: { orderId: string; initialMethod?: string }) {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [ref, setRef] = useState("");
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [method, setMethod] = useState<PaymentMethodId | null>(
+    initialMethod === "qris" || initialMethod === "transfer" ? initialMethod : null,
+  );
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -97,7 +100,11 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
       if (!res.ok) throw new Error((data as any)?.error || "Upload gagal.");
       toast.success("Bukti terkirim. Menunggu verifikasi.");
       setFile(null);
+      // Reload the order so the view switches to the status-only layout
+      // (proofSubmitted -> waiting verification). Reloading data refreshes the
+      // order state so the UI swaps to the waiting-verification view.
       await load(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) {
       toast.error(e?.message || "Upload gagal.");
     } finally {
@@ -139,6 +146,38 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
     return s === "AWAITING_VERIFICATION" || s === "PENDING_VERIFICATION" || s === "WAITING_PROOF";
   }
 
+  const instr = order?.payment?.instructions;
+  const { paid, rejected, inactive, proofSubmitted, awaiting, canUpload } = flags;
+
+  // After proof is submitted (and not yet verified/rejected), show only the
+  // status + items summary — hide payment instructions and the upload form.
+  const waitingVerification = proofSubmitted && !paid && !rejected && !inactive;
+
+  const paymentMethods = useMemo(
+    () => buildPaymentMethods(instr),
+    [instr],
+  );
+  const activeMethod: PaymentMethodId | null =
+    method && paymentMethods.some((m) => m.id === method)
+      ? method
+      : paymentMethods[0]?.id ?? null;
+
+  useEffect(() => {
+    const expiresAt = order?.payment?.expiresAt;
+    if (!expiresAt || paid || rejected || inactive || proofSubmitted) {
+      setCountdown(null);
+      return;
+    }
+    const end = new Date(expiresAt).getTime();
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      setCountdown(remaining);
+    };
+    const interval = setInterval(tick, 1000);
+    tick();
+    return () => clearInterval(interval);
+  }, [order, paid, rejected, inactive, proofSubmitted]);
+
   if (loading) {
     return (
       <>
@@ -168,25 +207,6 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
     );
   }
 
-  const instr = order.payment?.instructions;
-  const { paid, rejected, inactive, proofSubmitted, awaiting, canUpload } = flags;
-
-  useEffect(() => {
-    const expiresAt = order?.payment?.expiresAt;
-    if (!expiresAt || paid || rejected || inactive || proofSubmitted) {
-      setCountdown(null);
-      return;
-    }
-    const end = new Date(expiresAt).getTime();
-    const tick = () => {
-      const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
-      setCountdown(remaining);
-    };
-    const interval = setInterval(tick, 1000);
-    tick();
-    return () => clearInterval(interval);
-  }, [order, paid, rejected, inactive, proofSubmitted]);
-
   return (
     <>
       <TopDesktopNav />
@@ -194,9 +214,8 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
         <div className="sticky top-0 z-10 border-b bg-background/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl sm:px-5 lg:pt-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Checkout & status</p>
-              <h1 className="mt-1 text-xl font-semibold">Pesanan {order.orderNumber}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Bayar via transfer, unggah bukti, lalu pantau status di sini.</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status pesanan</p>
+              <h1 className="mt-1 text-lg font-semibold leading-tight">Pesanan {order.orderNumber}</h1>
             </div>
             <Button size="icon-sm" variant="outline" className="rounded-xl" onClick={() => load()} aria-label="Muat ulang">
               <RefreshCw className="size-4" />
@@ -204,90 +223,133 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
           </div>
         </div>
 
-        <div className="space-y-4 px-4 pt-4 sm:px-5">
+        <div className="space-y-3 px-4 pt-4 sm:px-5">
           <Card className="rounded-3xl p-4 sm:p-5">
             <div className="flex items-start gap-3">
-              <span className={`mt-0.5 flex size-10 items-center justify-center rounded-2xl ${paid ? "bg-green-500/10 text-green-700 dark:text-green-300" : awaiting ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
-                {paid ? <CheckCircle2 className="size-5" /> : awaiting ? <Clock3 className="size-5" /> : <UtensilsCrossed className="size-5" />}
+              <span className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-2xl ${paid ? "bg-green-500/10 text-green-700 dark:text-green-300" : rejected || inactive ? "bg-destructive/10 text-destructive" : awaiting ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-muted text-muted-foreground"}`}>
+                {paid ? <CheckCircle2 className="size-5" /> : rejected || inactive ? <XCircle className="size-5" /> : awaiting ? <Clock3 className="size-5" /> : <ReceiptText className="size-5" />}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{order.orderStatus}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {paid
-                    ? "Pembayaran terverifikasi. Pesanan dapat diproses."
-                    : awaiting
-                      ? "Bukti diterima, menunggu verifikasi staff."
-                      : rejected
-                        ? "Bukti ditolak/bermasalah. Unggah bukti yang benar."
-                        : "Transfer sesuai total lalu unggah bukti. Pembayaran diverifikasi manual oleh staff."}
+                <p className="font-semibold">
+                  {paid ? "Pembayaran diterima" : rejected ? "Bukti ditolak" : inactive ? "Pesanan nonaktif" : awaiting ? "Bukti diterima, sedang diproses" : "Menunggu pembayaran"}
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge variant="secondary">Order: {order.orderStatus}</Badge>
-                  <Badge variant={paid ? "default" : rejected || inactive ? "destructive" : "secondary"}>
-                    Bayar: {order.paymentStatus}
-                  </Badge>
-                </div>
-                {countdown !== null && !paid && !rejected && !inactive && !proofSubmitted ? (
-                  <div className="mt-2 flex items-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] px-3 py-2 text-xs">
-                    <Clock3 className="size-3.5 shrink-0 text-blue-600" />
-                    <span className="font-medium text-blue-700 dark:text-blue-400">
-                      {countdown > 0
-                        ? `Waktu tersisa untuk mengunggah bukti: ${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")}`
-                        : "Waktu habis. Pesanan akan dibatalkan otomatis."}
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {paid
+                    ? "Pembayaran terverifikasi. Pesanan siap diproses."
+                    : rejected
+                      ? "Bukti ditolak. Silakan unggah ulang bukti yang benar."
+                      : inactive
+                        ? "Pesanan ini tidak aktif atau kedaluwarsa."
+                        : awaiting
+                          ? "Bukti pembayaran sudah kami terima dan sedang diverifikasi staff."
+                          : "Selesaikan pembayaran lalu unggah bukti transfer."}
+                </p>
+              </div>
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-muted/30 p-3 text-sm">
+              <div className="min-w-0">
+                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Atas nama</dt>
+                <dd className="mt-0.5 truncate font-medium">{order.customerName || "-"}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{order.tableNumber ? "Meja" : "Tipe"}</dt>
+                <dd className="mt-0.5 truncate font-medium">{order.tableNumber || (order.orderType === "dine-in" ? "Makan di tempat" : "Bawa pulang")}</dd>
+              </div>
+            </dl>
+
+            <ol className="mt-4 flex items-center text-[11px] font-medium">
+              {[
+                { key: "placed", label: "Dipesan", done: true, active: false },
+                { key: "proof", label: "Bukti", done: proofSubmitted || paid, active: !proofSubmitted && !paid && !rejected && !inactive },
+                { key: "verify", label: "Verifikasi", done: paid, active: awaiting },
+              ].map((step, idx, arr) => (
+                <li key={step.key} className={`flex items-center ${idx < arr.length - 1 ? "flex-1" : ""}`}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] ${step.done ? "bg-green-600 text-white" : step.active ? "bg-blue-600 text-white" : "bg-muted text-muted-foreground"}`}>
+                      {step.done ? <CheckCircle2 className="size-3" /> : idx + 1}
                     </span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </Card>
+                    <span className={step.done || step.active ? "text-foreground" : "text-muted-foreground"}>{step.label}</span>
+                  </span>
+                  {idx < arr.length - 1 ? <span className={`mx-1.5 h-px flex-1 ${step.done ? "bg-green-600/40" : "bg-border"}`} /> : null}
+                </li>
+              ))}
+            </ol>
 
-          <Card className="rounded-3xl p-4 sm:p-5">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Total transfer</p>
-                <p className="text-2xl font-semibold tabular-nums">{formatCurrency(order.totals?.total || 0)}</p>
-              </div>
-              <ReceiptText className="size-5 text-muted-foreground" />
-            </div>
-          </Card>
-
-          <Card className="rounded-3xl p-4 sm:p-5">
-            <p className="text-sm font-medium">Instruksi transfer / QRIS</p>
-            {instr?.qrisImageUrl ? (
-              <div className="mt-3 flex flex-col items-center gap-2 rounded-2xl border bg-muted/10 p-4">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Scan QRIS untuk bayar</p>
-                <img src={String(instr.qrisImageUrl)} alt="QRIS pembayaran" className="h-56 w-56 rounded-xl border bg-white object-contain p-2" />
-                <p className="text-center text-xs text-muted-foreground">Scan dengan aplikasi pembayaran, lalu unggah bukti transfer di bawah.</p>
+            {countdown !== null && !paid && !rejected && !inactive && !proofSubmitted ? (
+              <div className="mt-3 flex items-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] px-3 py-2 text-xs">
+                <Clock3 className="size-3.5 shrink-0 text-blue-600" />
+                <span className="font-medium text-blue-700 dark:text-blue-400">
+                  {countdown > 0
+                    ? `Sisa waktu unggah bukti: ${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, "0")}`
+                    : "Waktu habis. Pesanan dibatalkan otomatis."}
+                </span>
               </div>
             ) : null}
-            {instr?.accountNumber || instr?.bankName ? (
-              <div className="mt-3 space-y-2 text-sm">
-                {instr.bankName ? (
-                  <div className="flex justify-between rounded-2xl border bg-muted/10 px-3 py-2"><span className="text-muted-foreground">Bank/E-wallet</span><span className="font-medium">{instr.bankName}</span></div>
-                ) : null}
-                {instr.accountName ? (
-                  <div className="flex justify-between rounded-2xl border bg-muted/10 px-3 py-2"><span className="text-muted-foreground">Atas nama</span><span className="font-medium">{instr.accountName}</span></div>
-                ) : null}
-                {instr.accountNumber ? (
-                  <button type="button" onClick={() => copy(instr.accountNumber)} className="flex w-full items-center justify-between rounded-2xl border bg-muted/10 px-3 py-2 text-left">
-                    <span className="text-muted-foreground">No. tujuan</span>
-                    <span className="inline-flex items-center gap-2 font-medium">{instr.accountNumber}<Copy className="size-3.5 text-muted-foreground" /></span>
-                  </button>
-                ) : null}
-              </div>
-            ) : !instr?.qrisImageUrl ? (
-              <p className="mt-2 text-sm text-muted-foreground">Transfer sesuai total, lalu unggah bukti untuk verifikasi staff.</p>
-            ) : null}
-            {instr?.instructions ? <p className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">{instr.instructions}</p> : null}
-            <div className={`mt-3 flex items-start gap-2 rounded-2xl border p-3 text-xs ${paid ? "border-green-500/20 bg-green-500/[0.05]" : rejected ? "border-destructive/20 bg-destructive/[0.04] text-destructive" : "border-blue-500/12 bg-blue-500/[0.04] text-muted-foreground"}`}>
-              {paid ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : rejected ? <XCircle className="mt-0.5 size-4 shrink-0" /> : proofSubmitted ? <Clock3 className="mt-0.5 size-4 shrink-0" /> : <AlertTriangle className="mt-0.5 size-4 shrink-0" />}
-              <span>
-                {paid ? "Pembayaran terverifikasi." : rejected ? "Bukti ditolak/bermasalah. Unggah bukti yang benar." : proofSubmitted ? "Bukti diterima, menunggu verifikasi staff. Belum otomatis lunas." : "Pembayaran tidak otomatis lunas. Unggah bukti setelah transfer."}
-              </span>
-            </div>
           </Card>
 
-          {canUpload ? (
+          {!waitingVerification ? (
+          <Card className="rounded-3xl p-4 sm:p-5">
+            <p className="text-sm font-medium">Pembayaran</p>
+            {paymentMethods.length > 1 ? (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {paymentMethods.map((m) => {
+                  const selected = activeMethod === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMethod(m.id)}
+                      aria-pressed={selected}
+                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                        selected
+                          ? "border-blue-600 bg-blue-600/[0.06] text-foreground ring-1 ring-blue-600"
+                          : "border-border/70 bg-muted/10 text-muted-foreground hover:bg-muted/30"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="mt-3">
+              {activeMethod === "qris" && instr?.qrisImageUrl ? (
+                <div className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/10 p-4">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Scan untuk bayar</p>
+                  <img src={String(instr.qrisImageUrl)} alt="QRIS pembayaran" className="h-52 w-52 rounded-xl border bg-white object-contain p-2" />
+                </div>
+              ) : activeMethod === "transfer" && (instr?.accountNumber || instr?.bankName) ? (
+                <div className="overflow-hidden rounded-2xl border text-sm">
+                  {instr.bankName ? (
+                    <div className="flex justify-between gap-3 px-3 py-2.5"><span className="text-muted-foreground">Bank/E-wallet</span><span className="font-medium">{instr.bankName}</span></div>
+                  ) : null}
+                  {instr.accountName ? (
+                    <div className="flex justify-between gap-3 border-t px-3 py-2.5"><span className="text-muted-foreground">Atas nama</span><span className="font-medium">{instr.accountName}</span></div>
+                  ) : null}
+                  {instr.accountNumber ? (
+                    <button type="button" onClick={() => copy(instr.accountNumber)} className="flex w-full items-center justify-between gap-3 border-t bg-muted/30 px-3 py-2.5 text-left">
+                      <span className="text-muted-foreground">No. tujuan</span>
+                      <span className="inline-flex items-center gap-2 font-mono font-medium">{instr.accountNumber}<Copy className="size-3.5 text-muted-foreground" /></span>
+                    </button>
+                  ) : null}
+                </div>
+              ) : !instr?.qrisImageUrl ? (
+                <p className="text-sm text-muted-foreground">Transfer sesuai total, lalu unggah bukti.</p>
+              ) : null}
+            </div>
+            {instr?.instructions ? <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{instr.instructions}</p> : null}
+            {rejected ? (
+              <div className="mt-3 flex items-start gap-2 rounded-2xl border border-destructive/20 bg-destructive/[0.04] p-3 text-xs text-destructive">
+                <XCircle className="mt-0.5 size-4 shrink-0" />
+                <span>Bukti ditolak. Unggah ulang bukti yang benar.</span>
+              </div>
+            ) : null}
+          </Card>
+          ) : null}
+
+          {canUpload && !waitingVerification ? (
             <Card className="rounded-3xl p-4 sm:p-5">
               <p className="text-sm font-medium">Unggah bukti transfer</p>
               <div className="mt-4 space-y-3">
@@ -315,18 +377,22 @@ export function StorefrontOrderView({ orderId }: { orderId: string }) {
 
           <Card className="rounded-3xl p-4 sm:p-5">
             <p className="text-sm font-medium">Ringkasan item</p>
-            <div className="mt-3 space-y-2">
+            <ul className="mt-3 space-y-2">
               {(order.items || []).map((i: any, idx: number) => (
-                <div key={idx} className="flex justify-between gap-3 text-sm">
-                  <span>{i.quantity}× {i.productName}{i.variantName ? ` · ${i.variantName}` : ""}</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(i.subtotal)}</span>
-                </div>
+                <li key={idx} className="flex justify-between gap-3 text-sm">
+                  <span className="min-w-0 text-muted-foreground">
+                    <span className="font-medium text-foreground">{i.quantity}×</span> {i.productName}{i.variantName ? ` · ${i.variantName}` : ""}
+                  </span>
+                  <span className="shrink-0 font-medium tabular-nums">{formatCurrency(i.subtotal)}</span>
+                </li>
               ))}
-            </div>
-            <div className="mt-3 border-t pt-3 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(order.totals?.subtotal || 0)}</span></div>
-              <div className="mt-1 flex justify-between"><span className="text-muted-foreground">Pajak</span><span>{formatCurrency(order.totals?.tax || 0)}</span></div>
-              <div className="mt-2 flex justify-between text-base font-semibold"><span>Total</span><span>{formatCurrency(order.totals?.total || 0)}</span></div>
+            </ul>
+            <div className="mt-3 space-y-1.5 border-t pt-3 text-sm">
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="tabular-nums">{formatCurrency(order.totals?.subtotal || 0)}</span></div>
+              {(order.totals?.tax || 0) > 0 ? (
+                <div className="flex justify-between text-muted-foreground"><span>Pajak</span><span className="tabular-nums">{formatCurrency(order.totals?.tax || 0)}</span></div>
+              ) : null}
+              <div className="flex justify-between pt-1 text-base font-semibold"><span>Total</span><span className="tabular-nums">{formatCurrency(order.totals?.total || 0)}</span></div>
             </div>
           </Card>
 

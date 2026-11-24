@@ -8,10 +8,11 @@ export const dynamic = "force-dynamic";
 export default async function StorefrontCheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ orderId?: string; paymentId?: string }>;
+  searchParams: Promise<{ orderId?: string; paymentId?: string; method?: string; view?: string }>;
 }) {
   const params = await searchParams;
   const orderId = typeof params.orderId === "string" ? params.orderId : null;
+  const method = typeof params.method === "string" ? params.method : undefined;
 
   return (
     <Suspense
@@ -21,7 +22,11 @@ export default async function StorefrontCheckoutPage({
         </div>
       }
     >
-      {orderId ? <StorefrontOrderView orderId={orderId} /> : <StorefrontCheckout />}
+      {orderId ? (
+        <StorefrontOrderView orderId={orderId} initialMethod={method} />
+      ) : (
+        <StorefrontCheckout />
+      )}
     </Suspense>
   );
 }

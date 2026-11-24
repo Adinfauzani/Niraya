@@ -111,11 +111,16 @@ export const voidTransactionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+const latitudeSchema = z.number().min(-90).max(90);
+const longitudeSchema = z.number().min(-180).max(180);
+
 export const createStoreSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(200),
   code: z.string().trim().min(1).max(20).toUpperCase(),
   address: z.string().trim().max(500).optional().nullable(),
+  latitude: latitudeSchema.optional().nullable(),
+  longitude: longitudeSchema.optional().nullable(),
   phone: z.string().trim().max(60).optional().nullable(),
   email: z.string().email().max(160).optional().nullable(),
   timezone: timezoneSchema,

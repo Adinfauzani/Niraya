@@ -69,7 +69,7 @@ async function loadCheckoutSettings(tx: any, businessId: string) {
         coalesce(ps."QrManualTransferEnabled", bs."QrManualTransferEnabled", false) as manual,
         coalesce(os."TaxRate", bs."TaxRate") as tax_rate,
         coalesce(os."ReservationExpiryMinutes", bs."ReservationExpiryMinutes", 30) as reservation_expiry,
-        coalesce(os."PaymentExpiryMinutes", bs."PaymentExpiryMinutes", 10) as payment_expiry,
+        coalesce(os."PaymentExpiryMinutes", 10) as payment_expiry,
         coalesce(ps."ManualTransferBankName", bs."ManualTransferBankName") as bank,
         coalesce(ps."ManualTransferAccountName", bs."ManualTransferAccountName") as acc_name,
         coalesce(ps."ManualTransferAccountNumber", bs."ManualTransferAccountNumber") as acc_no,
@@ -92,7 +92,7 @@ async function loadCheckoutSettings(tx: any, businessId: string) {
     };
   } catch {
     try {
-      const rows = await tx.execute(sql`select "QrManualTransferEnabled" as manual, "TaxRate" as tax_rate, "ReservationExpiryMinutes" as reservation_expiry, "PaymentExpiryMinutes" as payment_expiry, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions, "ManualTransferQrisImageUrl" as qris_image from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
+      const rows = await tx.execute(sql`select "QrManualTransferEnabled" as manual, "TaxRate" as tax_rate, "ReservationExpiryMinutes" as reservation_expiry, "ManualTransferBankName" as bank, "ManualTransferAccountName" as acc_name, "ManualTransferAccountNumber" as acc_no, "ManualTransferInstructions" as instructions, "ManualTransferQrisImageUrl" as qris_image from "settings"."BusinessSettings" where "Id" = 'default' limit 1`);
       const r = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : null);
       if (r) return { manualTransferEnabled: !!r.manual, taxRate: r.tax_rate != null ? Number(r.tax_rate) : null, reservationExpiryMinutes: r.reservation_expiry != null ? Number(r.reservation_expiry) : 30, paymentExpiryMinutes: r.payment_expiry != null ? Number(r.payment_expiry) : 10, instructions: { bankName: r.bank ?? null, accountName: r.acc_name ?? null, accountNumber: r.acc_no ?? null, instructions: r.instructions ?? null, qrisImageUrl: r.qris_image ?? null } };
     } catch {}
@@ -114,6 +114,12 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
   const canonicalItems = [...input.items].sort((a,b)=> (a.productId+(a.variantId||'')).localeCompare(b.productId+(b.variantId||'')));
   const productIds = [...new Set(canonicalItems.map(i=>i.productId))].sort();
 
+  // Load settings before the transaction so a settings-query failure cannot
+  // abort the Postgres transaction (which would turn the row locks below into
+  // "current transaction is aborted" errors). Settings are read-only.
+  const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadBusinessAndStore(db, input.storeId);
+  const settings = await loadCheckoutSettings(db, defaultBusinessId);
+
   return db.transaction(async (tx: any) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`storefront:${input.idempotencyKey}`}))`);
     const [existing] = await tx.select().from(checkoutIdempotency).where(eq(checkoutIdempotency.key, input.idempotencyKey)).limit(1);
@@ -121,8 +127,6 @@ export async function executeStorefrontCheckout(input: StorefrontCheckoutInput) 
       if (existing.requestHash !== requestHash) throw Object.assign(new Error("Idempotency key dipakai dengan payload berbeda."), { status: 409 });
       if (existing.response) return { ...(JSON.parse(existing.response) as any), idempotent: true };
     }
-    const { businessId: defaultBusinessId, storeId: defaultStoreId } = await loadBusinessAndStore(tx, input.storeId);
-    const settings = await loadCheckoutSettings(tx, defaultBusinessId);
     if (!settings.manualTransferEnabled) throw Object.assign(new Error("Pembayaran transfer manual belum diaktifkan."), { status: 403 });
 
     const productRows = await tx.select().from(products).where(inArray(products.id, productIds)).orderBy(products.id).for("update");
